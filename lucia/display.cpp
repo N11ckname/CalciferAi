@@ -10,23 +10,21 @@ void drawParam(int x, int y, const char* label, int value, const char* unit, int
   char buffer[16];  // Réduit de 20 à 16
   snprintf(buffer, 16, "%s%d%s", label, value, unit);
   
-  u8g2.setFont(u8g2_font_5x7_tf);
+  // Note: la fonte est déjà définie dans la fonction appelante
   
   if (selectedParam == paramIndex && editMode == NAV_MODE) {
-    // Inverted colors for selection
+    // Frame for selection (cadre d'un pixel)
+    int width = strlen(buffer) * 6;
+    u8g2.drawStr(x, y, buffer);
+    u8g2.drawFrame(x - 1, y - 9, width + 2, 11);
+  } else if (selectedParam == paramIndex && editMode == EDIT_MODE) {
+    // Inverted colors for editing (négatif)
     int width = strlen(buffer) * 6;
     u8g2.setDrawColor(1);
-    u8g2.drawBox(x, y - 7, width, 8);
+    u8g2.drawBox(x - 1, y - 9, width + 2, 11);
     u8g2.setDrawColor(0);
     u8g2.drawStr(x, y, buffer);
     u8g2.setDrawColor(1);
-  } else if (selectedParam == paramIndex && editMode == EDIT_MODE) {
-    // Outline for editing
-    int width = strlen(buffer) * 6;
-    u8g2.drawStr(x, y, buffer);
-    if (drawBox) {
-      u8g2.drawFrame(x - 1, y - 7, width + 2, 9);
-    }
   } else {
     u8g2.drawStr(x, y, buffer);
   }
@@ -36,47 +34,46 @@ void drawProgOffScreen() {
   float currentTemp = readTemperature();
   int powerHold = getPowerHold();
   
-  u8g2.setFont(u8g2_font_5x7_tf);
+  char buf[16];
   
-  // Title
-  u8g2.drawStr(0, 7, "OFF");
+  // Current temperature - Large at top
+  u8g2.setFont(u8g2_font_9x15_tf);
+  snprintf(buf, 16, "%.0fC", currentTemp);
+  u8g2.drawStr(0, 12, buf);
   
   // Temperature warning if active
+  u8g2.setFont(u8g2_font_6x10_tf);
   if (tempFailActive) {
-    u8g2.drawStr(50, 7, "WARN");
+    u8g2.drawStr(90, 10, "WARN");
+  } else {
+    // Relay status
+    snprintf(buf, 16, "%d%%", powerHold);
+    u8g2.drawStr(90, 10, buf);
   }
   
-  // Phase 1
-  char buf[16];
-  u8g2.drawStr(0, 17, "P1:");
-  drawParam(15, 17, "", params.step1Speed, "C/h", 1, false);
-  drawParam(50, 17, ">", params.step1Temp, "C", 0, false);
-  drawParam(95, 17, "", params.step1Wait, "m", 2, false);
+  // Phase 1 - Ordre: gauche à droite
+  u8g2.setFont(u8g2_font_6x10_tf);
+  u8g2.drawStr(0, 24, "P1:");
+  drawParam(18, 24, "", params.step1Speed, "C/h", 0, false);   // Gauche
+  drawParam(60, 24, ">", params.step1Temp, "C", 1, false);     // Centre
+  drawParam(105, 24, "", params.step1Wait, "m", 2, false);     // Droite
   
-  // Phase 2
-  u8g2.drawStr(0, 27, "P2:");
-  drawParam(15, 27, "", params.step2Speed, "C/h", 4, false);
-  drawParam(50, 27, ">", params.step2Temp, "C", 3, false);
-  drawParam(95, 27, "", params.step2Wait, "m", 5, false);
+  // Phase 2 - Ordre: gauche à droite
+  u8g2.drawStr(0, 36, "P2:");
+  drawParam(18, 36, "", params.step2Speed, "C/h", 3, false);   // Gauche
+  drawParam(60, 36, ">", params.step2Temp, "C", 4, false);     // Centre
+  drawParam(105, 36, "", params.step2Wait, "m", 5, false);     // Droite
   
-  // Phase 3
-  u8g2.drawStr(0, 37, "P3:");
-  drawParam(15, 37, "", params.step3Speed, "C/h", 7, false);
-  drawParam(50, 37, ">", params.step3Temp, "C", 6, false);
-  drawParam(95, 37, "", params.step3Wait, "m", 8, false);
+  // Phase 3 - Ordre: gauche à droite
+  u8g2.drawStr(0, 48, "P3:");
+  drawParam(18, 48, "", params.step3Speed, "C/h", 6, false);   // Gauche
+  drawParam(60, 48, ">", params.step3Temp, "C", 7, false);     // Centre
+  drawParam(105, 48, "", params.step3Wait, "m", 8, false);     // Droite
   
-  // Cooldown
-  u8g2.drawStr(0, 47, "Cool:");
-  drawParam(27, 47, "", params.step4Speed, "C/h", 9, false);
-  drawParam(70, 47, "<", params.step4Target, "C", 10, false);
-  
-  // Current temperature
-  snprintf(buf, 16, "T:%.0fC", currentTemp);
-  u8g2.drawStr(0, 57, buf);
-  
-  // Relay status
-  snprintf(buf, 16, "OFF,%d%%", powerHold);
-  u8g2.drawStr(70, 57, buf);
+  // Cooldown - Ordre: gauche à droite
+  u8g2.drawStr(0, 60, "Cool:");
+  drawParam(30, 60, "", params.step4Speed, "C/h", 9, false);   // Gauche
+  drawParam(80, 60, "<", params.step4Target, "C", 10, false);  // Droite
 }
 
 void drawProgOnScreen() {
@@ -209,13 +206,29 @@ void drawProgOnScreen() {
 
 #ifdef ENABLE_GRAPH
 void drawGraph() {
-  u8g2.setFont(u8g2_font_5x7_tf);
-  u8g2.drawStr(0, 7, "Graph");
-  
   if (graphIndex < 2) {
-    u8g2.drawStr(10, 35, "No data");
+    u8g2.setFont(u8g2_font_6x10_tf);
+    u8g2.drawStr(20, 32, "Pas de donnees");
     return;
   }
+  
+  // Calculate elapsed time since program start
+  unsigned long totalElapsed = millis() - programStartTime;
+  int hours = totalElapsed / 3600000;
+  int minutes = (totalElapsed % 3600000) / 60000;
+  
+  // Header: Phase + Time elapsed
+  u8g2.setFont(u8g2_font_6x10_tf);
+  char header[20];
+  const char* phaseNames[] = {"", "P1", "P2", "P3", "Cool"};
+  snprintf(header, 20, "%s T+%dh%02d", phaseNames[currentPhase], hours, minutes);
+  u8g2.drawStr(0, 8, header);
+  
+  // Current temperatures
+  float currentTemp = readTemperature();
+  char tempStr[20];
+  snprintf(tempStr, 20, "%.0f->%.0fC", currentTemp, targetTemp);
+  u8g2.drawStr(70, 8, tempStr);
   
   // Find min and max temperatures for scaling
   float minTemp = graphActual[0];
@@ -238,16 +251,19 @@ void drawGraph() {
     tempRange = maxTemp - minTemp;
   }
   
-  // Graph area: y from 10 to 62 (52 pixels)
-  int graphHeight = 52;
-  int graphTop = 10;
+  // Graph area: y from 14 to 62 (48 pixels)
+  int graphHeight = 48;
+  int graphTop = 14;
+  int graphLeft = 20;
+  int graphWidth = 107;  // 127 - 20
   
   // Draw axes
-  u8g2.drawLine(10, graphTop, 10, graphTop + graphHeight);
-  u8g2.drawLine(10, graphTop + graphHeight, 127, graphTop + graphHeight);
+  u8g2.drawLine(graphLeft, graphTop, graphLeft, graphTop + graphHeight);
+  u8g2.drawLine(graphLeft, graphTop + graphHeight, 127, graphTop + graphHeight);
   
   // Draw temperature labels
-  char tempLabel[6];  // Réduit de 8 à 6
+  u8g2.setFont(u8g2_font_5x7_tf);
+  char tempLabel[6];
   snprintf(tempLabel, 6, "%d", (int)maxTemp);
   u8g2.drawStr(0, graphTop + 5, tempLabel);
   snprintf(tempLabel, 6, "%d", (int)minTemp);
@@ -255,21 +271,21 @@ void drawGraph() {
   
   // Draw data points
   int pointsToShow = graphIndex;
-  if (pointsToShow > 117) pointsToShow = 117; // Max width minus margin
+  if (pointsToShow > graphWidth) pointsToShow = graphWidth;
   
   int startIndex = graphIndex - pointsToShow;
   if (startIndex < 0) startIndex = 0;
   
   for (int i = 0; i < pointsToShow - 1; i++) {
     int index = startIndex + i;
+    int x1 = graphLeft + 1 + i;
+    int x2 = x1 + 1;
     
     // Target temperature (dotted line)
     int y1_target = graphTop + graphHeight - ((graphTarget[index] - minTemp) / tempRange * graphHeight);
     int y2_target = graphTop + graphHeight - ((graphTarget[index + 1] - minTemp) / tempRange * graphHeight);
-    int x1 = 11 + i;
-    int x2 = 11 + i + 1;
     
-    if (i % 2 == 0) { // Dotted
+    if (i % 3 == 0) { // Dotted
       u8g2.drawLine(x1, y1_target, x2, y2_target);
     }
     
@@ -281,4 +297,3 @@ void drawGraph() {
   }
 }
 #endif
-

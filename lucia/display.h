@@ -18,6 +18,7 @@ extern Phase currentPhase;
 extern float targetTemp;
 extern bool tempFailActive;
 extern unsigned long tempFailStartTime;
+extern unsigned long programStartTime;
 extern unsigned long phaseStartTime;
 extern unsigned long plateauStartTime;
 extern bool plateauReached;

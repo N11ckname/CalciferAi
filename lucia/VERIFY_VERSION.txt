@@ -1,0 +1,11 @@
+DERNIÈRE VERSION - 2 décembre 2024
+
+Vérifiez que vos fichiers contiennent :
+
+display.cpp ligne 57 devrait avoir:
+  drawParam(18, 24, "", params.step1Speed, "C/h", 0, false);
+
+lucia.ino ligne 271 devrait avoir:
+  case 0: value = &params.step1Speed; minVal = 1; maxVal = 1000; step = 10; break;
+
+Si ce n'est pas le cas, les modifications n'ont pas été appliquées correctement.

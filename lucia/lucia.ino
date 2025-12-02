@@ -42,10 +42,15 @@ long encoderPosition = 0;
 
 // ===== TIMING VARIABLES =====
 unsigned long lastDisplayUpdate = 0;
+unsigned long programStartTime = 0;
 unsigned long phaseStartTime = 0;
 unsigned long plateauStartTime = 0;
 unsigned long tempFailStartTime = 0;
 bool tempFailActive = false;
+#ifdef ENABLE_GRAPH
+unsigned long lastGraphUpdate = 0;
+#define GRAPH_UPDATE_INTERVAL 30000  // 30 secondes entre chaque point
+#endif
 
 // ===== BUTTON STATES =====
 bool lastEncoderButton = HIGH;
@@ -64,7 +69,8 @@ bool plateauReached = false;
 #define EEPROM_ADDR_PARAMS 2
 
 // ===== GRAPH DATA =====
-// Désactivé pour économiser RAM (512 octets). Décommentez si vous avez assez de RAM
+// Désactivé pour économiser RAM sur Arduino Uno (512 octets)
+// Pour activer : décommentez la ligne ci-dessous (nécessite Arduino Mega ou optimisations)
 // #define ENABLE_GRAPH
 #ifdef ENABLE_GRAPH
   #define GRAPH_SIZE 64
@@ -152,12 +158,12 @@ void loop() {
   if (progState == PROG_ON) {
     updateProgram(currentMillis, temp);
     #ifdef ENABLE_GRAPH
-    updateGraphData(temp);
+    updateGraphData(currentMillis, temp);
     #endif
   }
   
   // Update display
-  if (currentMillis - lastDisplayUpdate >= 500) {
+  if (currentMillis - lastDisplayUpdate >= 100) {
     lastDisplayUpdate = currentMillis;
     updateDisplay();
   }
@@ -175,27 +181,16 @@ void handleButtons(unsigned long currentMillis) {
     longPressHandled = false;
   }
   
-  #ifdef ENABLE_GRAPH
-  if (encoderButton == LOW && !longPressHandled) {
-    if (currentMillis - encoderButtonPressTime > 1000) {
-      // Long press - toggle graph
-      showGraph = !showGraph;
-      longPressHandled = true;
-      if (!showGraph) graphIndex = 0;
-    }
-  }
-  #endif
-  
   if (encoderButton == HIGH && lastEncoderButton == LOW) {
     if (!longPressHandled && currentMillis - encoderButtonPressTime < 1000) {
       // Short press
-      #ifdef ENABLE_GRAPH
-      if (showGraph) {
-        showGraph = false;
-        graphIndex = 0;
-      } else 
-      #endif
-      if (progState == PROG_OFF) {
+      if (progState == PROG_ON) {
+        // En mode PROG_ON, switcher entre l'écran normal et le graphe
+        #ifdef ENABLE_GRAPH
+        showGraph = !showGraph;
+        #endif
+      } else if (progState == PROG_OFF) {
+        // En mode PROG_OFF, basculer le mode d'édition
         toggleEditMode();
       }
     }
@@ -249,11 +244,13 @@ void toggleProgState() {
   if (progState == PROG_OFF) {
     progState = PROG_ON;
     currentPhase = PHASE_1;
+    programStartTime = millis();
     phaseStartTime = millis();
     plateauReached = false;
     targetTemp = readTemperature();
     #ifdef ENABLE_GRAPH
     graphIndex = 0;
+    lastGraphUpdate = millis();
     #endif
     resetPID();
   } else {
@@ -268,18 +265,23 @@ void editParameter(int delta) {
   int* value;
   int minVal, maxVal, step;
   
+  // Ordre de sélection: gauche à droite, haut en bas
   switch (selectedParam) {
-    case 0: value = &params.step1Temp; minVal = 0; maxVal = 1500; step = 10; break;
-    case 1: value = &params.step1Speed; minVal = 1; maxVal = 1000; step = 10; break;
-    case 2: value = &params.step1Wait; minVal = 0; maxVal = 999; step = 5; break;
-    case 3: value = &params.step2Temp; minVal = 0; maxVal = 1500; step = 10; break;
-    case 4: value = &params.step2Speed; minVal = 1; maxVal = 1000; step = 10; break;
-    case 5: value = &params.step2Wait; minVal = 0; maxVal = 999; step = 5; break;
-    case 6: value = &params.step3Temp; minVal = 0; maxVal = 1500; step = 10; break;
-    case 7: value = &params.step3Speed; minVal = 1; maxVal = 1000; step = 10; break;
-    case 8: value = &params.step3Wait; minVal = 0; maxVal = 999; step = 5; break;
-    case 9: value = &params.step4Speed; minVal = 1; maxVal = 1000; step = 10; break;
-    case 10: value = &params.step4Target; minVal = 0; maxVal = 1000; step = 10; break;
+    // Phase 1
+    case 0: value = &params.step1Speed; minVal = 1; maxVal = 1000; step = 10; break;   // P1 gauche
+    case 1: value = &params.step1Temp; minVal = 0; maxVal = 1500; step = 10; break;    // P1 centre
+    case 2: value = &params.step1Wait; minVal = 0; maxVal = 999; step = 5; break;      // P1 droite
+    // Phase 2
+    case 3: value = &params.step2Speed; minVal = 1; maxVal = 1000; step = 10; break;   // P2 gauche
+    case 4: value = &params.step2Temp; minVal = 0; maxVal = 1500; step = 10; break;    // P2 centre
+    case 5: value = &params.step2Wait; minVal = 0; maxVal = 999; step = 5; break;      // P2 droite
+    // Phase 3
+    case 6: value = &params.step3Speed; minVal = 1; maxVal = 1000; step = 10; break;   // P3 gauche
+    case 7: value = &params.step3Temp; minVal = 0; maxVal = 1500; step = 10; break;    // P3 centre
+    case 8: value = &params.step3Wait; minVal = 0; maxVal = 999; step = 5; break;      // P3 droite
+    // Cooldown
+    case 9: value = &params.step4Speed; minVal = 1; maxVal = 1000; step = 10; break;   // Cool gauche
+    case 10: value = &params.step4Target; minVal = 0; maxVal = 1000; step = 10; break; // Cool droite
     default: return;
   }
   
@@ -357,11 +359,24 @@ bool checkPhaseComplete(float currentTemp, int phaseTemp, bool &reached, unsigne
 }
 
 #ifdef ENABLE_GRAPH
-void updateGraphData(float temp) {
-  if (graphIndex < GRAPH_SIZE) {
-    graphActual[graphIndex] = temp;
-    graphTarget[graphIndex] = targetTemp;
-    graphIndex++;
+void updateGraphData(unsigned long currentMillis, float temp) {
+  // Enregistrer un point toutes les 30 secondes pour couvrir 32 minutes avec 64 points
+  if (currentMillis - lastGraphUpdate >= GRAPH_UPDATE_INTERVAL) {
+    lastGraphUpdate = currentMillis;
+    
+    if (graphIndex < GRAPH_SIZE) {
+      graphActual[graphIndex] = temp;
+      graphTarget[graphIndex] = targetTemp;
+      graphIndex++;
+    } else {
+      // Décaler les données vers la gauche pour garder les plus récentes
+      for (int i = 0; i < GRAPH_SIZE - 1; i++) {
+        graphActual[i] = graphActual[i + 1];
+        graphTarget[i] = graphTarget[i + 1];
+      }
+      graphActual[GRAPH_SIZE - 1] = temp;
+      graphTarget[GRAPH_SIZE - 1] = targetTemp;
+    }
   }
 }
 #endif

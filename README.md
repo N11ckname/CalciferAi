@@ -69,6 +69,34 @@ Follow the **`BUILD_GUIDE.md`** for complete hardware assembly instructions incl
 **Estimated Cost:** $100-200 USD  
 **Build Time:** 1-2 weeks (including parts delivery)
 
+## 🖥️ Simulator - Test Without Hardware!
+
+**NEW!** A complete Python simulator lets you test your kiln controller virtually before building the hardware.
+
+### ✨ Simulator Features
+- 🔥 **Realistic kiln physics** with thermal inertia
+- 📊 **Real-time graphs** of temperature and power
+- ⚡ **Accelerated testing** - test a 10-hour cycle in 6 minutes (100x speed)
+- 🎮 **Interactive controls** - virtual encoder and buttons
+- 🐛 **Debug panel** - see all internal variables
+- 💾 **Virtual EEPROM** - parameter persistence
+
+### 🚀 Quick Start Simulator
+
+```bash
+cd simulator
+pip3 install -r requirements.txt
+python3 main.py
+```
+
+**See** `SIMULATOR_GUIDE.md` for complete documentation.
+
+**Perfect for:**
+- Testing firing programs before hardware build
+- Fine-tuning PID parameters
+- Training users safely
+- Rapid development iteration
+
 ## 💻 After Code Generation
 
 1. **Save Files:**

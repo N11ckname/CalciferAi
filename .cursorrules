@@ -1,0 +1,62 @@
+# CalciferAi - Contexte du Projet
+
+## 📋 Description Générale
+CalciferAi est un système de contrôle intelligent de four céramique basé sur Arduino avec simulation Python.
+
+### Contexte :
+- Préparer les éléments pour un novice qui ne connait pas le codage
+- Ne pas créer de nombreux fichiers d'aide, de démarrage... faire simple et concis dans un seul fichier pour les notices et aides.
+
+### Composants principaux :
+- **lucia/** : Code Arduino (contrôleur réel) pour Arduino Uno avec affichage OLED SH1106
+- **simulator/** : Simulateur Python complet avec interface graphique Pygame
+- **TEST_MODE/** : Outils de diagnostic et de test matériel
+
+## 🎯 Architecture du Projet
+
+### Code Arduino (lucia/)
+- **Plateforme** : Arduino Uno (ATmega328P)
+- **Affichage** : OLED SH1106 128x64 pixels (I2C)
+- **Capteur** : MAX31856 avec thermocouple Type S
+- **Interface** : Encodeur rotatif + boutons
+- **Contrôle** : Relais SSR avec PWM logiciel
+- **Langage** : C++ pour Arduino
+
+## 🔧 Contraintes Techniques
+
+### Arduino
+- **Mémoire programme** : Maximum 31 232 octets (Uno)
+- **RAM** : Seulement 2048 octets → OPTIMISATION CRITIQUE
+- **Timing** : Utiliser UNIQUEMENT millis(), JAMAIS delay()
+- **EEPROM** : Sauvegarde limitée (100 000 cycles) → sauvegarder uniquement à la sortie d'édition
+- **Non-bloquant** : Tout le code doit être non-bloquant
+
+5.2, Matplotlib 3.8.2, NumPy 1.26.2
+
+## ✍️ Conventions de Code
+
+### Général
+- **Commentaires** : TOUJOURS en français
+- **Noms de variables** : Anglais technique acceptable, mais privilégier le français pour la clarté
+- **Documentation** : Fichiers .md en français
+- **Clarté > Concision** : Code lisible et bien documenté
+
+### Arduino (C++)
+- **Variables globales** : Minimiser pour économiser la RAM
+- **Strings** : Utiliser F() macro pour stocker en Flash (ex: `F("Texte")`)
+- **Debug** : Éviter Serial.print en production (coûte de la RAM)
+
+### Python
+- **Style** : snake_case pour fonctions (ex: `update_display()`)
+- **Type hints** : Encouragés pour clarté
+- **Docstrings** : En français, format Google
+
+## 🛡️ Règles de Sécurité
+
+### CRITIQUE - Ne JAMAIS oublier :
+1. **Relais OFF en mode PROG_OFF** : Sécurité essentielle
+2. **Arrêt automatique** : Si erreur thermocouple > 2 minutes
+3. **Limite de changement** : PID max 10% par cycle
+4. **Bouton d'urgence** : Arrêt immédiat à tout moment
+5. **Validation** : Tester TOUJOURS sans four connecté d'abord
+
