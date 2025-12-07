@@ -17,7 +17,8 @@ extern Adafruit_MAX31856 max31856;
 #define MAX_POWER_CHANGE 10.0
 
 // PWM Parameters
-#define CYCLE_LENGTH 1000  // 1 second in milliseconds
+#define CYCLE_LENGTH 1000         // Cycle PWM de 1 seconde
+#define PID_UPDATE_INTERVAL 1000  // Calcul PID toutes les 1 seconde (suffisant pour un four)
 
 // Function declarations
 void initTemperatureControl();
