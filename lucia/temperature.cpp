@@ -31,7 +31,8 @@ void initTemperatureControl() {
   integralError = 0;
   lastError = 0;
   lastPowerHold = 0;
-  lastPIDUpdate = millis();
+  // Initialiser dans le passé pour forcer le premier calcul PID immédiat
+  lastPIDUpdate = millis() - PID_UPDATE_INTERVAL;
 }
 
 float readTemperature() {
@@ -50,7 +51,8 @@ void resetPID() {
   integralError = 0;
   lastError = 0;
   lastPowerHold = 0;
-  lastPIDUpdate = millis();
+  // Initialiser dans le passé pour forcer le premier calcul PID immédiat
+  lastPIDUpdate = millis() - PID_UPDATE_INTERVAL;
 }
 
 // Fonction interne : gestion du PWM logiciel (doit s'exécuter à chaque loop)
@@ -96,8 +98,9 @@ void updateTemperatureControl(float currentTemp, float targetTemp, bool enabled)
     return;  // Pas encore le moment de recalculer le PID
   }
   
-  // Calculer le delta temps en secondes
+  // Calculer le delta temps en secondes (limité pour éviter les sauts)
   float dt = (currentMillis - lastPIDUpdate) / 1000.0;
+  if (dt > 2.0) dt = 1.0;  // Limiter dt pour le premier appel ou après une pause
   lastPIDUpdate = currentMillis;
   
   // Calculer l'erreur (mise à l'échelle x100)
