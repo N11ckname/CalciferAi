@@ -10,6 +10,14 @@
 #define PIN_RELAY 6
 #define PIN_LED A1
 
+// PID Parameters (variables modifiables)
+float KP = 2.0;
+float KI = 0.5;
+float KD = 0.0;
+
+// PWM Parameters (variables modifiables)
+unsigned int CYCLE_LENGTH = 1000;  // Cycle PWM de 1 seconde par défaut
+
 // Global variables
 float powerHold = 0;        // 0-100%
 bool powerON = false;
@@ -31,16 +39,22 @@ void initTemperatureControl() {
   integralError = 0;
   lastError = 0;
   lastPowerHold = 0;
+  pwmCycleStart = millis(); // Initialiser le cycle PWM au démarrage
   // Initialiser dans le passé pour forcer le premier calcul PID immédiat
   lastPIDUpdate = millis() - PID_UPDATE_INTERVAL;
 }
 
 float readTemperature() {
+  // Lire d'abord la température (la bibliothèque gère le timing SPI)
   float temp = max31856.readThermocoupleTemperature();
   
-  // Check for faults
-  uint8_t fault = max31856.readFault();
-  if (fault) {
+  // Vérifier si la lecture est valide
+  if (isnan(temp)) {
+    return NAN;
+  }
+  
+  // Vérifier les limites raisonnables
+  if (temp < -200 || temp > 2000) {
     return NAN;
   }
   
@@ -51,14 +65,40 @@ void resetPID() {
   integralError = 0;
   lastError = 0;
   lastPowerHold = 0;
+  pwmCycleStart = millis(); // Réinitialiser le cycle PWM
   // Initialiser dans le passé pour forcer le premier calcul PID immédiat
   lastPIDUpdate = millis() - PID_UPDATE_INTERVAL;
 }
 
 // Fonction interne : gestion du PWM logiciel (doit s'exécuter à chaque loop)
 void updatePWM(unsigned long currentMillis) {
+  // Gérer le cas spécial 100% : relais toujours ON
+  if (lastPowerHold >= 10000) {
+    setRelay(true);
+    // Réinitialiser le cycle périodiquement même à 100% pour éviter le dépassement
+    unsigned long cycleElapsed = currentMillis - pwmCycleStart;
+    if (cycleElapsed >= CYCLE_LENGTH) {
+      pwmCycleStart = currentMillis;
+    }
+    return;
+  }
+  
+  // Gérer le cas spécial 0% : relais toujours OFF
+  if (lastPowerHold <= 0) {
+    setRelay(false);
+    // Réinitialiser le cycle périodiquement même à 0% pour éviter le dépassement
+    unsigned long cycleElapsed = currentMillis - pwmCycleStart;
+    if (cycleElapsed >= CYCLE_LENGTH) {
+      pwmCycleStart = currentMillis;
+    }
+    return;
+  }
+  
+  // Cas normal : PWM entre 0% et 100%
+  // Calculer le temps écoulé dans le cycle actuel
   unsigned long cycleElapsed = currentMillis - pwmCycleStart;
   
+  // Vérifier si on doit commencer un nouveau cycle
   if (cycleElapsed >= CYCLE_LENGTH) {
     // Début d'un nouveau cycle PWM
     pwmCycleStart = currentMillis;
@@ -66,19 +106,19 @@ void updatePWM(unsigned long currentMillis) {
   }
   
   // Calculer le temps ON pour ce cycle (lastPowerHold est en 0-10000)
-  unsigned long onTime = (lastPowerHold * CYCLE_LENGTH) / 10000;
+  // Exemple : lastPowerHold=5000 (50%), CYCLE_LENGTH=1000ms → onTime=500ms
+  unsigned long onTime = ((unsigned long)lastPowerHold * (unsigned long)CYCLE_LENGTH) / 10000UL;
   
   // Activer/désactiver le relais selon la position dans le cycle
-  if (cycleElapsed < onTime && lastPowerHold > 0) {
+  // Si cycleElapsed est dans la période ON, allumer le relais
+  if (cycleElapsed < onTime) {
     setRelay(true);
   } else {
     setRelay(false);
   }
 }
 
-void updateTemperatureControl(float currentTemp, float targetTemp, bool enabled) {
-  unsigned long currentMillis = millis();
-  
+void updateTemperatureControl(float currentTemp, float targetTemp, bool enabled, unsigned long currentMillis) {
   // Si désactivé : arrêter le chauffage et réinitialiser le PID
   if (!enabled) {
     powerHold = 0;

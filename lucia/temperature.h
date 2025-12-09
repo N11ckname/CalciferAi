@@ -10,20 +10,21 @@
 // External references
 extern Adafruit_MAX31856 max31856;
 
-// PID Parameters
-#define KP 2.0
-#define KI 0.5
-#define KD 0.0
+// PID Parameters (maintenant des variables externes modifiables)
+extern float KP;
+extern float KI;
+extern float KD;
 #define MAX_POWER_CHANGE 10.0
 
 // PWM Parameters
-#define CYCLE_LENGTH 1000         // Cycle PWM de 1 seconde
+extern unsigned int CYCLE_LENGTH; // Cycle PWM en millisecondes (modifiable)
 #define PID_UPDATE_INTERVAL 1000  // Calcul PID toutes les 1 seconde (suffisant pour un four)
 
 // Function declarations
 void initTemperatureControl();
 float readTemperature();
-void updateTemperatureControl(float currentTemp, float targetTemp, bool enabled);
+float getCurrentTemperature(); // Retourne la température mise en cache (lue toutes les 500ms)
+void updateTemperatureControl(float currentTemp, float targetTemp, bool enabled, unsigned long currentMillis);
 void setRelay(bool state);
 int getPowerHold();
 void resetPID();

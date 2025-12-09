@@ -166,6 +166,29 @@ I want to isolate the main functions in different files:
 - Adafruit_MAX31856 (for the thermocouple module)
 - Encoder (for the rotary encoder)
 
+## Settings Screen
+
+The Phase 0 (prog_OFF) screen includes a settings icon "S" in the top right corner (replacing the power percentage display). This icon is clickable and leads to a Settings screen.
+
+### Settings Screen Contents
+
+The Settings screen displays a list of modifiable parameters using the same typography, size, and visual effects as Phase 0:
+
+1. **Heat Cycle** (named "Heat Cycle", corresponds to `Pcycle`) - PWM cycle duration in milliseconds
+2. **Kp** - Proportional gain of the PID controller (displayed on its own line)
+3. **Ki** - Integral gain of the PID controller (displayed on its own line)
+4. **Kd** - Derivative gain of the PID controller (displayed on its own line)
+5. **Exit** - Button to exit settings and return to Phase 0
+
+### Settings Navigation and Editing
+
+- Navigation uses the same encoder mechanism as Phase 0
+- Click encoder button to enter/exit edit mode for selected parameter
+- Rotate encoder to modify values while in edit mode
+- Click on "Exit" to return to Phase 0
+- Settings are saved to EEPROM when exiting edit mode
+- All settings take effect immediately when modified
+
 ## Variables List
 
 Here is the list of variables to use, with their role:

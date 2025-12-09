@@ -6,7 +6,7 @@
 #define DEFINITIONS_H
 
 // ===== PROGRAM STATES =====
-enum ProgramState { PROG_OFF, PROG_ON };
+enum ProgramState { PROG_OFF, PROG_ON, SETTINGS };
 enum Phase { PHASE_0, PHASE_1, PHASE_2, PHASE_3, PHASE_4_COOLDOWN };
 enum EditMode { NAV_MODE, EDIT_MODE };
 
@@ -23,6 +23,14 @@ struct FiringParams {
   int step3Wait;
   int step4Speed;
   int step4Target;
+};
+
+// ===== SETTINGS PARAMETERS STRUCTURE =====
+struct SettingsParams {
+  int pcycle;      // Cycle PWM en millisecondes
+  float kp;        // Gain proportionnel PID (x100 pour stockage en int)
+  float ki;        // Gain intégral PID (x100 pour stockage en int)
+  float kd;        // Gain dérivé PID (x100 pour stockage en int)
 };
 
 #endif
