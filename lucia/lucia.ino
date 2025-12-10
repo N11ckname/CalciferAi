@@ -57,23 +57,20 @@ unsigned long tempFailStartTime = 0;
 bool tempFailActive = false;
 unsigned long lastTempRead = 0;
 float cachedTemperature = NAN;
-#define TEMP_READ_INTERVAL 500  // Lire la température toutes les 500ms (2 fois par seconde)
-
-// ===== EEPROM PROTECTION =====
-unsigned long lastEEPROMWrite = 0;
-#define EEPROM_WRITE_MIN_INTERVAL 5000  // Minimum 5 secondes entre deux écritures EEPROM
-bool eepromWriteAllowed = true;  // Permettre la première écriture au démarrage
 #ifdef ENABLE_GRAPH
 unsigned long lastGraphUpdate = 0;
 #define GRAPH_UPDATE_INTERVAL 30000  // 30 secondes entre chaque point
 #endif
 
+// ===== EEPROM PROTECTION =====
+unsigned long lastEEPROMWrite = 0;
+bool eepromWriteAllowed = true;  // Permettre la première écriture au démarrage
+
 // ===== BUTTON STATES =====
 bool lastEncoderButton = HIGH;
 bool lastPushButton = HIGH;
-unsigned long encoderButtonPressTime = 0;
-bool longPressHandled = false;
 bool showGraph = false;
+bool criticalErrorActive = false;
 
 // ===== TEMPERATURE CONTROL =====
 float targetTemp = 0;
@@ -114,26 +111,38 @@ void setup() {
   pinMode(PIN_MAX_CS, OUTPUT);
   digitalWrite(PIN_MAX_CS, HIGH); // CS doit être HIGH quand non utilisé
   SPI.begin();
-  delay(100); // Petit délai pour stabilisation
+  
+  // Attente non-bloquante pour stabilisation SPI (100ms)
+  unsigned long spiInitTime = millis();
+  while (millis() - spiInitTime < 100) {
+    // Attente active pour stabilisation
+  }
   
   // Initialize MAX31856
   if (!max31856.begin()) {
+    criticalErrorActive = true;
     u8g2.clearBuffer();
     u8g2.setFont(u8g2_font_6x10_tf);
     u8g2.drawStr(0, 20, "MAX31856 Error!");
     u8g2.drawStr(0, 35, "Check wiring");
+    u8g2.drawStr(0, 50, "Press to retry");
     u8g2.sendBuffer();
-    while (1) delay(1000);
+    // Ne pas bloquer, gérer dans loop()
+  } else {
+    max31856.setThermocoupleType(MAX31856_TCTYPE_S);
+    max31856.setConversionMode(MAX31856_CONTINUOUS);
+    
+    // Attente non-bloquante pour la première conversion (500ms)
+    unsigned long conversionStartTime = millis();
+    while (millis() - conversionStartTime < 500) {
+      // Attente active pour première conversion
+    }
+    
+    // Test de lecture et initialisation du cache
+    float testTemp = readTemperature();
+    cachedTemperature = testTemp;
+    lastTempRead = millis();
   }
-  
-  max31856.setThermocoupleType(MAX31856_TCTYPE_S);
-  max31856.setConversionMode(MAX31856_CONTINUOUS);
-  
-  // Test de lecture immédiate et initialisation du cache
-  delay(500); // Attendre la première conversion
-  float testTemp = readTemperature();
-  cachedTemperature = testTemp; // Initialiser le cache
-  lastTempRead = millis();
   
   // Load parameters from EEPROM (initialise aussi les backups)
   loadFromEEPROM();
@@ -155,7 +164,25 @@ void setup() {
 void loop() {
   unsigned long currentMillis = millis();
   
-  // Read temperature (limité à 2 fois par seconde pour éviter de surcharger le MAX31856)
+  // Gestion de l'erreur critique MAX31856 (si détectée au setup)
+  if (criticalErrorActive) {
+    // Attendre un appui sur le bouton pour retry
+    bool pushButton = digitalRead(PIN_PUSH_BUTTON);
+    if (pushButton == LOW && lastPushButton == HIGH) {
+      // Tentative de réinitialisation du MAX31856
+      if (max31856.begin()) {
+        max31856.setThermocoupleType(MAX31856_TCTYPE_S);
+        max31856.setConversionMode(MAX31856_CONTINUOUS);
+        criticalErrorActive = false;
+        cachedTemperature = readTemperature();
+        lastTempRead = currentMillis;
+      }
+    }
+    lastPushButton = pushButton;
+    return; // Ne rien faire d'autre tant que l'erreur n'est pas résolue
+  }
+  
+  // Lecture température (intervalle défini pour optimiser les performances)
   float temp;
   if (currentMillis - lastTempRead >= TEMP_READ_INTERVAL) {
     temp = readTemperature();
@@ -165,38 +192,36 @@ void loop() {
     temp = cachedTemperature; // Utiliser la dernière valeur lue
   }
   
-  // Check for temperature reading failure
+  // Vérification des erreurs de lecture température
   if (isnan(temp) || temp < -100 || temp > 1500) {
     if (!tempFailActive) {
       tempFailActive = true;
       tempFailStartTime = currentMillis;
-    } else if (currentMillis - tempFailStartTime > 120000) { // 2 minutes
-      // Critical error - stop heating
+    } else if (currentMillis - tempFailStartTime > TEMP_FAIL_TIMEOUT) {
+      // Erreur critique - arrêt du chauffage pour sécurité
       if (progState == PROG_ON) {
         progState = PROG_OFF;
         currentPhase = PHASE_0;
         setRelay(false);
       }
-      displayCriticalError();
-      waitForButtonPress();
-      tempFailActive = false;
-      return;
+      tempFailActive = false; // Réinitialiser pour permettre une nouvelle tentative
     }
   } else {
     tempFailActive = false;
   }
   
-  // Handle buttons
+  // Gestion des boutons
   handleButtons(currentMillis);
   
-  // Handle encoder (limité à 50Hz pour éviter de surcharger avec encoder.read())
+  // Gestion de l'encodeur (intervalle optimisé pour réduire la charge CPU)
   static unsigned long lastEncoderCheck = 0;
-  if ((progState == PROG_OFF || progState == SETTINGS) && !showGraph && (currentMillis - lastEncoderCheck >= 20)) {
+  if ((progState == PROG_OFF || progState == SETTINGS) && !showGraph && 
+      (currentMillis - lastEncoderCheck >= ENCODER_CHECK_INTERVAL)) {
     handleEncoder();
     lastEncoderCheck = currentMillis;
   }
   
-  // Update program state
+  // Mise à jour de l'état du programme
   if (progState == PROG_ON) {
     updateProgram(currentMillis, temp);
     #ifdef ENABLE_GRAPH
@@ -204,71 +229,53 @@ void loop() {
     #endif
   }
   
-  // Update display (passer currentMillis pour éviter les appels millis() supplémentaires)
-  if (currentMillis - lastDisplayUpdate >= 100) {
+  // Mise à jour de l'affichage
+  if (currentMillis - lastDisplayUpdate >= DISPLAY_UPDATE_INTERVAL) {
     lastDisplayUpdate = currentMillis;
     updateDisplay(currentMillis);
   }
   
-  // Update temperature control (passer currentMillis au lieu de le rappeler)
+  // Mise à jour du contrôle de température
   updateTemperatureControl(temp, targetTemp, progState == PROG_ON, currentMillis);
 }
 
 void handleButtons(unsigned long currentMillis) {
-  // Handle encoder button
+  // Gestion du bouton encodeur
   bool encoderButton = digitalRead(PIN_ENCODER_SW);
   
   if (encoderButton == LOW && lastEncoderButton == HIGH) {
-    encoderButtonPressTime = currentMillis;
-    longPressHandled = false;
-  }
-  
-  if (encoderButton == HIGH && lastEncoderButton == LOW) {
-    if (!longPressHandled && currentMillis - encoderButtonPressTime < 1000) {
-      // Short press
-      if (progState == PROG_ON) {
-        // En mode PROG_ON, switcher entre l'écran normal et le graphe
-        #ifdef ENABLE_GRAPH
-        showGraph = !showGraph;
-        #endif
-      } else if (progState == PROG_OFF) {
-        // Vérifier si on est sur l'icône settings (selectedParam == -1 ou position spéciale)
-        // On utilise selectedParam == 11 comme indicateur pour l'icône settings
-        if (selectedParam == 11 && editMode == NAV_MODE) {
-          // Entrer dans les settings
-          progState = SETTINGS;
-          selectedSetting = 0;
-          editMode = NAV_MODE;
-        } else {
-          // Basculer le mode d'édition normal
-          toggleEditMode();
-        }
-      } else if (progState == SETTINGS) {
-        // En mode SETTINGS, gérer la navigation/édition
-        if (selectedSetting == 4) {
-          // Bouton Exit : retourner à PROG_OFF
-          progState = PROG_OFF;
-          selectedParam = 0;
-          editMode = NAV_MODE;
-        } else {
-          // Toggle edit mode pour les autres paramètres
-          toggleSettingsEditMode();
-        }
+    // Appui détecté - exécuter l'action immédiatement
+    if (progState == PROG_ON) {
+      #ifdef ENABLE_GRAPH
+      showGraph = !showGraph;
+      #endif
+    } else if (progState == PROG_OFF) {
+      if (selectedParam == 11 && editMode == NAV_MODE) {
+        progState = SETTINGS;
+        selectedSetting = 0;
+        editMode = NAV_MODE;
+      } else {
+        toggleEditMode();
+      }
+    } else if (progState == SETTINGS) {
+      if (selectedSetting == 4) {
+        progState = PROG_OFF;
+        selectedParam = 0;
+        editMode = NAV_MODE;
+      } else {
+        toggleSettingsEditMode();
       }
     }
   }
   
   lastEncoderButton = encoderButton;
   
-  // Handle push button
+  // Gestion du bouton push
   bool pushButton = digitalRead(PIN_PUSH_BUTTON);
   
   if (pushButton == LOW && lastPushButton == HIGH) {
-    delay(50); // Debounce
-    pushButton = digitalRead(PIN_PUSH_BUTTON);
-    if (pushButton == LOW) {
-      toggleProgState();
-    }
+    // Appui détecté - exécuter l'action immédiatement
+    toggleProgState();
   }
   
   lastPushButton = pushButton;
@@ -367,19 +374,19 @@ void editSetting(int delta) {
 }
 
 void saveSettingsToEEPROM() {
-  // Vérifier la protection temporelle (minimum 5 secondes entre écritures)
+  // Protection temporelle : minimum 5 secondes entre écritures pour préserver l'EEPROM
   unsigned long currentMillis = millis();
   if (!eepromWriteAllowed) {
-    // Vérifier si suffisamment de temps s'est écoulé depuis la dernière écriture
+    // Vérifier si l'intervalle minimum est respecté
     // La soustraction gère automatiquement le rollover de millis()
     if (currentMillis - lastEEPROMWrite < EEPROM_WRITE_MIN_INTERVAL) {
-      return; // Trop tôt, ignorer l'écriture pour protéger l'EEPROM
+      return; // Intervalle insuffisant, écriture ignorée pour protéger l'EEPROM
     }
   }
   
-  // Sauvegarder les settings dans l'EEPROM après les params (toujours)
+  // Écrire les settings dans l'EEPROM (après la structure FiringParams)
   EEPROM.put(EEPROM_ADDR_PARAMS + sizeof(FiringParams), settings);
-  lastEEPROMWrite = currentMillis; // Mettre à jour le timestamp
+  lastEEPROMWrite = currentMillis;
   eepromWriteAllowed = false; // Activer la protection après la première écriture
 }
 
@@ -487,14 +494,16 @@ void updateProgram(unsigned long currentMillis, float currentTemp) {
 }
 
 float calculateTargetTemp(float startTemp, int targetTemp, int speed, unsigned long elapsed) {
-  // Utiliser des calculs entiers pour économiser le code
+  // Calcul de la température cible basé sur la vitesse de montée (°C/h)
+  // Conversion : elapsed (ms) -> heures -> température
   unsigned long tempIncrease = (unsigned long)speed * elapsed / 3600000UL;
   float calculatedTarget = startTemp + (float)tempIncrease;
   return (calculatedTarget > targetTemp) ? (float)targetTemp : calculatedTarget;
 }
 
 float calculateCoolingTarget(float startTemp, int targetTemp, int speed, unsigned long elapsed) {
-  // Utiliser des calculs entiers pour économiser le code
+  // Calcul de la température cible basé sur la vitesse de descente (°C/h)
+  // Conversion : elapsed (ms) -> heures -> température
   unsigned long tempDecrease = (unsigned long)speed * elapsed / 3600000UL;
   float calculatedTarget = startTemp - (float)tempDecrease;
   return (calculatedTarget < targetTemp) ? (float)targetTemp : calculatedTarget;
@@ -542,56 +551,40 @@ void updateDisplay(unsigned long currentMillis) {
       drawGraph();
     } else 
     #endif
-    if (tempFailActive && (currentMillis - tempFailStartTime > 120000)) {
-      // Error is displayed in main loop
+    if (tempFailActive && (currentMillis - tempFailStartTime > TEMP_FAIL_TIMEOUT)) {
+      // Afficher l'erreur critique de température
+      u8g2.setFont(u8g2_font_6x10_tf);
+      u8g2.drawStr(0, 10, "ERROR!");
+      u8g2.drawStr(0, 25, "Temp fail 2min");
+      u8g2.drawStr(0, 40, "Heat stopped");
+      u8g2.drawStr(0, 55, "Check sensor");
     } else {
       if (progState == SETTINGS) {
         drawSettingsScreen();
       } else if (progState == PROG_OFF) {
         drawProgOffScreen();
       } else {
-        drawProgOnScreen(currentMillis); // Passer currentMillis pour éviter millis() dans la fonction
+        drawProgOnScreen(currentMillis);
       }
     }
   } while (u8g2.nextPage());
 }
 
-void displayCriticalError() {
-  u8g2.firstPage();
-  do {
-    u8g2.setFont(u8g2_font_6x10_tf);
-    u8g2.drawStr(0, 10, "ERROR!");
-    u8g2.drawStr(0, 25, "Temp fail 2min");
-    u8g2.drawStr(0, 40, "Heat stopped");
-    u8g2.drawStr(0, 55, "Press button");
-  } while (u8g2.nextPage());
-}
-
-void waitForButtonPress() {
-  while (digitalRead(PIN_PUSH_BUTTON) == HIGH) {
-    delay(10);
-  }
-  delay(50); // Debounce
-  while (digitalRead(PIN_PUSH_BUTTON) == LOW) {
-    delay(10);
-  }
-}
-
 void saveToEEPROM() {
-  // Vérifier la protection temporelle (minimum 5 secondes entre écritures)
+  // Protection temporelle : minimum 5 secondes entre écritures pour préserver l'EEPROM
   unsigned long currentMillis = millis();
   if (!eepromWriteAllowed) {
-    // Vérifier si suffisamment de temps s'est écoulé depuis la dernière écriture
+    // Vérifier si l'intervalle minimum est respecté
     // La soustraction gère automatiquement le rollover de millis()
     if (currentMillis - lastEEPROMWrite < EEPROM_WRITE_MIN_INTERVAL) {
-      return; // Trop tôt, ignorer l'écriture pour protéger l'EEPROM
+      return; // Intervalle insuffisant, écriture ignorée pour protéger l'EEPROM
     }
   }
   
-  // Sauvegarder toujours (pour première utilisation ou changement)
+  // Écrire le magic number et les paramètres de cuisson
   EEPROM.put(EEPROM_ADDR_MAGIC, EEPROM_MAGIC);
   EEPROM.put(EEPROM_ADDR_PARAMS, params);
-  lastEEPROMWrite = currentMillis; // Mettre à jour le timestamp
+  lastEEPROMWrite = currentMillis;
   eepromWriteAllowed = false; // Activer la protection après la première écriture
 }
 

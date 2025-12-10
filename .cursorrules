@@ -1,12 +1,16 @@
 # CalciferAi - Contexte du Projet
 
+#AI General rules
+- Répond de manière assez concise aux questions
+- Ne crée pas de documentation sice n'est pas explicitement demandé!
+
 ## 📋 Description Générale
 CalciferAi est un système de contrôle intelligent de four céramique basé sur Arduino avec simulation Python.
 
 ### Contexte :
 - Préparer les éléments pour un novice qui ne connait pas le codage
 - Ne pas créer de nombreux fichiers d'aide, de démarrage... faire simple et concis dans un seul fichier pour les notices et aides.
-
+- Ne met pas à jour TEST_MODE et Simulator si ce n'est pas demandé explicitement.
 ### Composants principaux :
 - **lucia/** : Code Arduino (contrôleur réel) pour Arduino Uno avec affichage OLED SH1106
 - **simulator/** : Simulateur Python complet avec interface graphique Pygame

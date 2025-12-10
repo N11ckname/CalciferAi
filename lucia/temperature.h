@@ -10,15 +10,16 @@
 // External references
 extern Adafruit_MAX31856 max31856;
 
-// PID Parameters (maintenant des variables externes modifiables)
-extern float KP;
-extern float KI;
-extern float KD;
-#define MAX_POWER_CHANGE 10.0
+// PID Parameters (variables externes modifiables via l'interface Settings)
+extern float KP;  // Gain proportionnel : réaction immédiate à l'erreur
+extern float KI;  // Gain intégral : correction de l'erreur résiduelle
+extern float KD;  // Gain dérivé : anticipation des variations (amortissement)
+#define MAX_POWER_CHANGE 10.0  // Limitation sécurité : max 10% de changement par cycle
 
-// PWM Parameters
+// PWM Parameters (contrôle de la fréquence de chauffage)
 extern unsigned int CYCLE_LENGTH; // Cycle PWM en millisecondes (modifiable)
-#define PID_UPDATE_INTERVAL 1000  // Calcul PID toutes les 1 seconde (suffisant pour un four)
+#define PID_UPDATE_INTERVAL 1000  // Fréquence de calcul PID : 1 seconde (1 Hz)
+                                   // Adapté à l'inertie thermique d'un four céramique
 
 // Function declarations
 void initTemperatureControl();

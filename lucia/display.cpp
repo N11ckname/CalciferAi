@@ -6,22 +6,24 @@
 #include "display.h"
 #include "temperature.h"
 
-// Helper function to draw parameter with selection
-// Buffer partagé pour économiser la RAM
+// Buffer partagé pour économiser la RAM (utilisé par toutes les fonctions d'affichage)
 static char sharedBuffer[20];
 
+// Fonction helper : affiche un paramètre avec effet de sélection/édition
+// - NAV_MODE : cadre autour du paramètre sélectionné
+// - EDIT_MODE : inversion vidéo (négatif) du paramètre en édition
 void drawParam(int x, int y, const char* label, int value, const char* unit, int paramIndex, bool drawBox) {
   snprintf(sharedBuffer, 20, "%s%d%s", label, value, unit);
   
-  // Note: la fonte est déjà définie dans la fonction appelante
+  // Note: la fonte doit être définie par la fonction appelante
   
   if (selectedParam == paramIndex && editMode == NAV_MODE) {
-    // Frame for selection (cadre d'un pixel)
+    // Mode navigation : afficher un cadre autour du paramètre
     int width = strlen(sharedBuffer) * 6;
     u8g2.drawStr(x, y, sharedBuffer);
     u8g2.drawFrame(x - 1, y - 9, width + 2, 11);
   } else if (selectedParam == paramIndex && editMode == EDIT_MODE) {
-    // Inverted colors for editing (négatif)
+    // Mode édition : inversion vidéo pour mettre en évidence
     int width = strlen(sharedBuffer) * 6;
     u8g2.setDrawColor(1);
     u8g2.drawBox(x - 1, y - 9, width + 2, 11);
@@ -29,55 +31,58 @@ void drawParam(int x, int y, const char* label, int value, const char* unit, int
     u8g2.drawStr(x, y, sharedBuffer);
     u8g2.setDrawColor(1);
   } else {
+    // Paramètre normal non sélectionné
     u8g2.drawStr(x, y, sharedBuffer);
   }
 }
 
 void drawProgOffScreen() {
-  // Utiliser la température mise en cache (lue dans loop() toutes les 500ms)
+  // Écran principal : configuration des phases de cuisson
+  // Utilise la température mise en cache (actualisée toutes les 500ms)
   float currentTemp = getCurrentTemperature();
   
-  // Current temperature - Large at top
+  // Affichage de la température actuelle en gros en haut
   u8g2.setFont(u8g2_font_9x15_tf);
   if (isnan(currentTemp)) {
     u8g2.drawStr(0, 12, "?C");
   } else {
-    // Formater la température (sans décimales pour économiser l'espace sur l'écran)
-    int tempInt = (int)(currentTemp + 0.5); // Arrondi
+    // Arrondi à l'entier le plus proche pour économiser l'espace
+    int tempInt = (int)(currentTemp + 0.5);
     snprintf(sharedBuffer, 20, "%dC", tempInt);
     u8g2.drawStr(0, 12, sharedBuffer);
   }
   
-  // Phase 1 - Ordre: gauche à droite
+  // Configuration Phase 1 : Vitesse (°C/h), Température cible (°C), Temps de palier (min)
   u8g2.setFont(u8g2_font_6x10_tf);
   u8g2.drawStr(0, 24, "P1:");
-  drawParam(18, 24, "", params.step1Speed, "C/h", 0, false);   // Gauche
-  drawParam(60, 24, ">", params.step1Temp, "C", 1, false);     // Centre
-  drawParam(105, 24, "", params.step1Wait, "m", 2, false);     // Droite
+  drawParam(18, 24, "", params.step1Speed, "C/h", 0, false);
+  drawParam(60, 24, ">", params.step1Temp, "C", 1, false);
+  drawParam(105, 24, "", params.step1Wait, "m", 2, false);
   
-  // Phase 2 - Ordre: gauche à droite
+  // Configuration Phase 2
   u8g2.drawStr(0, 36, "P2:");
-  drawParam(18, 36, "", params.step2Speed, "C/h", 3, false);   // Gauche
-  drawParam(60, 36, ">", params.step2Temp, "C", 4, false);     // Centre
-  drawParam(105, 36, "", params.step2Wait, "m", 5, false);     // Droite
+  drawParam(18, 36, "", params.step2Speed, "C/h", 3, false);
+  drawParam(60, 36, ">", params.step2Temp, "C", 4, false);
+  drawParam(105, 36, "", params.step2Wait, "m", 5, false);
   
-  // Phase 3 - Ordre: gauche à droite
+  // Configuration Phase 3
   u8g2.drawStr(0, 48, "P3:");
-  drawParam(18, 48, "", params.step3Speed, "C/h", 6, false);   // Gauche
-  drawParam(60, 48, ">", params.step3Temp, "C", 7, false);     // Centre
-  drawParam(105, 48, "", params.step3Wait, "m", 8, false);     // Droite
+  drawParam(18, 48, "", params.step3Speed, "C/h", 6, false);
+  drawParam(60, 48, ">", params.step3Temp, "C", 7, false);
+  drawParam(105, 48, "", params.step3Wait, "m", 8, false);
   
-  // Cooldown - Ordre: gauche à droite
+  // Configuration Cooldown : Vitesse de refroidissement, Température cible finale
   u8g2.drawStr(0, 60, "Cool:");
-  drawParam(30, 60, "", params.step4Speed, "C/h", 9, false);   // Gauche
-  drawParam(80, 60, "<", params.step4Target, "C", 10, false);  // Droite
+  drawParam(30, 60, "", params.step4Speed, "C/h", 9, false);
+  drawParam(80, 60, "<", params.step4Target, "C", 10, false);
   
-  // Icône settings (S) en haut à droite - avec sélection
+  // Icône settings (S) en haut à droite
   u8g2.setFont(u8g2_font_6x10_tf);
   if (tempFailActive) {
+    // Afficher avertissement si problème de température
     u8g2.drawStr(90, 10, "WARN");
   } else {
-    // Afficher l'icône settings avec effet de sélection
+    // Icône settings avec effet de sélection
     if (selectedParam == 11 && editMode == NAV_MODE) {
       u8g2.drawFrame(113, 0, 15, 12);
       u8g2.drawStr(115, 10, "S");
@@ -88,30 +93,32 @@ void drawProgOffScreen() {
       u8g2.drawStr(115, 10, "S");
       u8g2.setDrawColor(1);
     } else {
-      // Icône normale (non sélectionnée)
       u8g2.drawStr(115, 10, "S");
     }
   }
 }
 
-// Helper pour dessiner un paramètre de settings avec sélection (label à gauche, valeur à droite)
+// Fonction helper : affiche un paramètre de settings avec effet de sélection
+// Layout : label à gauche, valeur alignée à droite
+// - NAV_MODE : cadre sur toute la largeur
+// - EDIT_MODE : inversion vidéo sur toute la largeur
 void drawSettingParam(int y, const char* label, const char* value, int index) {
-  // Calculer la position de la valeur (alignée à droite)
+  // Calculer la position de la valeur pour alignement à droite
   int valueWidth = strlen(value) * 6;
   int valueX = 128 - valueWidth;
   
-  // Dessiner le label à gauche et la valeur à droite
+  // Dessiner le label et la valeur
   u8g2.drawStr(0, y, label);
   u8g2.drawStr(valueX, y, value);
   
-  // Gestion de la sélection
+  // Effet de sélection si c'est le paramètre actif
   if (selectedSetting == index) {
     int totalWidth = 128; // Largeur complète de l'écran
     if (editMode == NAV_MODE) {
-      // Frame for selection (encadre label et valeur)
+      // Mode navigation : cadre
       u8g2.drawFrame(0, y - 9, totalWidth, 11);
     } else if (editMode == EDIT_MODE) {
-      // Inverted colors for editing (encadre label et valeur)
+      // Mode édition : inversion vidéo
       u8g2.setDrawColor(1);
       u8g2.drawBox(0, y - 9, totalWidth, 11);
       u8g2.setDrawColor(0);
@@ -123,37 +130,38 @@ void drawSettingParam(int y, const char* label, const char* value, int index) {
 }
 
 void drawSettingsScreen() {
+  // Écran de configuration des paramètres avancés (PID et cycle de chauffe)
   u8g2.setFont(u8g2_font_6x10_tf);
   
-  // Titre SETTINGS en majuscules
+  // Titre
   u8g2.drawStr(0, 8, "SETTINGS");
   
-  // Heat Cycle (Pcycle)
+  // Heat Cycle : durée du cycle PWM en millisecondes
   snprintf(sharedBuffer, 20, "%dms", settings.pcycle);
   drawSettingParam(20, "Heat Cycle", sharedBuffer, 0);
   
-  // Kp - utiliser directement KP depuis temperature.h (toujours à jour)
+  // Kp : gain proportionnel du PID (utilise la valeur réelle depuis temperature.cpp)
   float kpValue = KP;
-  if (isnan(kpValue) || kpValue < 0.0) kpValue = 2.0; // Valeur par défaut
-  snprintf(sharedBuffer, 20, "%.1f", kpValue);
+  if (isnan(kpValue) || kpValue < 0.0) kpValue = 2.0;
+  dtostrf(kpValue, 4, 1, sharedBuffer);
   drawSettingParam(32, "Kp", sharedBuffer, 1);
   
-  // Ki - utiliser directement KI depuis temperature.h (toujours à jour)
+  // Ki : gain intégral du PID
   float kiValue = KI;
-  if (isnan(kiValue) || kiValue < 0.0) kiValue = 0.5; // Valeur par défaut
-  snprintf(sharedBuffer, 20, "%.1f", kiValue);
+  if (isnan(kiValue) || kiValue < 0.0) kiValue = 0.5;
+  dtostrf(kiValue, 4, 1, sharedBuffer);
   drawSettingParam(44, "Ki", sharedBuffer, 2);
   
-  // Kd - utiliser directement KD depuis temperature.h (toujours à jour)
+  // Kd : gain dérivé du PID
   float kdValue = KD;
-  if (isnan(kdValue) || kdValue < 0.0) kdValue = 0.0; // Valeur par défaut
-  snprintf(sharedBuffer, 20, "%.1f", kdValue);
+  if (isnan(kdValue) || kdValue < 0.0) kdValue = 0.0;
+  dtostrf(kdValue, 4, 1, sharedBuffer);
   drawSettingParam(56, "Kd", sharedBuffer, 3);
   
-  // Exit (aligné à gauche comme les autres)
+  // Exit : retour à l'écran principal
   u8g2.drawStr(0, 64, "Exit");
   
-  // Gestion de la sélection pour Exit
+  // Effet de sélection pour Exit
   if (selectedSetting == 4) {
     int exitWidth = 4 * 6; // "Exit" = 4 caractères * 6 pixels
     if (editMode == NAV_MODE) {
@@ -169,13 +177,13 @@ void drawSettingsScreen() {
 }
 
 void drawProgOnScreen(unsigned long currentMillis) {
-  // Utiliser la température mise en cache
+  // Écran de cuisson en cours : affiche les informations de la phase active
   float currentTemp = getCurrentTemperature();
   int powerHold = getPowerHold();
   
   u8g2.setFont(u8g2_font_6x10_tf);
   
-  // Titre avec nom de phase
+  // Déterminer les informations de la phase en cours
   const char* phaseTitle = "";
   int phaseTargetTemp = 0;
   int phaseSpeed = 0;
@@ -250,11 +258,11 @@ void drawProgOnScreen(unsigned long currentMillis) {
   snprintf(sharedBuffer, 20, "Heat Power:%d%%", powerHold);
   u8g2.drawStr(0, 50, sharedBuffer);
   
-  // Phase (pourcentage de progression de la phase)
+  // Phase : pourcentage de progression de la phase en cours
   int phasePercent = 0;
   if (!isnan(currentTemp)) {
     if (currentPhase == PHASE_4_COOLDOWN) {
-      // Pour Cool Down : calcul basé sur la descente
+      // Cool Down : progression basée sur la descente en température
       float tempRange = phaseStartTemp - phaseTargetTemp;
       if (tempRange > 0) {
         float progress = (phaseStartTemp - currentTemp) / tempRange;
@@ -263,9 +271,9 @@ void drawProgOnScreen(unsigned long currentMillis) {
         if (phasePercent > 100) phasePercent = 100;
       }
     } else {
-      // Pour Phase 1, 2, 3 : calcul basé sur la montée puis le plateau
+      // Phases 1, 2, 3 : progression basée sur la montée en température
       if (!plateauReached) {
-        // Montée en température : basée sur la température actuelle vs la cible
+        // Phase de montée : calculer le pourcentage par rapport à la cible
         float tempRange = phaseTargetTemp - phaseStartTemp;
         if (tempRange > 0) {
           float progress = (currentTemp - phaseStartTemp) / tempRange;
@@ -273,10 +281,10 @@ void drawProgOnScreen(unsigned long currentMillis) {
           if (phasePercent < 0) phasePercent = 0;
           if (phasePercent > 100) phasePercent = 100;
         } else if (currentTemp >= phaseTargetTemp) {
-          phasePercent = 100; // Température atteinte
+          phasePercent = 100;
         }
       } else {
-        // Plateau : toujours 100% une fois au plateau
+        // Plateau atteint : afficher 100%
         phasePercent = 100;
       }
     }
