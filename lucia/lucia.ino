@@ -45,8 +45,8 @@ int settingsScrollOffset = 0; // Scroll pour l'écran settings
 
 // ===== UI PARAMETERS =====
 EditMode editMode = NAV_MODE;
-int selectedParam = 0;
-const int NUM_PARAMS = 12; // 11 paramètres + 1 pour l'icône settings (index 11)
+int selectedParam = 2; // Sélectionne step1Temp par défaut (Settings=0, step1Speed=1, step1Temp=2)
+const int NUM_PARAMS = 12; // 12 paramètres (Settings + 11 paramètres de phases)
 long encoderPosition = 0;
 
 // ===== TIMING VARIABLES =====
@@ -242,7 +242,7 @@ void handleButtons(unsigned long currentMillis) {
     if (progState == PROG_ON) {
       showGraph = !showGraph;
     } else if (progState == PROG_OFF) {
-      if (selectedParam == 11 && editMode == NAV_MODE) {
+      if (selectedParam == 0 && editMode == NAV_MODE) {
         progState = SETTINGS;
         selectedSetting = 0;
         editMode = NAV_MODE;
@@ -252,7 +252,7 @@ void handleButtons(unsigned long currentMillis) {
     } else if (progState == SETTINGS) {
       if (selectedSetting == 5) {
         progState = PROG_OFF;
-        selectedParam = 0;
+        selectedParam = 2; // Retour sur step1Temp par défaut
         editMode = NAV_MODE;
       } else {
         toggleSettingsEditMode();
@@ -302,8 +302,8 @@ void handleEncoder() {
         if (selectedParam < 0) selectedParam = 0;
         if (selectedParam >= NUM_PARAMS) selectedParam = NUM_PARAMS - 1;
       } else {
-        // Edit selected parameter (mais pas l'icône settings)
-        if (selectedParam < NUM_PARAMS - 1) {
+        // Edit selected parameter (mais pas Settings qui est à l'index 0)
+        if (selectedParam != 0) {
           editParameter(delta);
         }
       }
@@ -455,23 +455,24 @@ void editParameter(int delta) {
   int* value;
   int minVal, maxVal, step;
   
-  // Ordre de sélection: gauche à droite, haut en bas
+  // Nouvel ordre: Settings en premier (0), puis les paramètres de phases (1-11)
   switch (selectedParam) {
+    case 0: return; // Settings - ne peut pas être édité ici, géré par le bouton
     // Phase 1
-    case 0: value = &params.step1Speed; minVal = 1; maxVal = 1000; step = 10; break;   // P1 gauche
-    case 1: value = &params.step1Temp; minVal = 0; maxVal = 1500; step = 10; break;    // P1 centre
-    case 2: value = &params.step1Wait; minVal = 0; maxVal = 999; step = 5; break;      // P1 droite
+    case 1: value = &params.step1Speed; minVal = 1; maxVal = 1000; step = 10; break;   // P1 gauche
+    case 2: value = &params.step1Temp; minVal = 0; maxVal = 1500; step = 10; break;    // P1 centre
+    case 3: value = &params.step1Wait; minVal = 0; maxVal = 999; step = 5; break;      // P1 droite
     // Phase 2
-    case 3: value = &params.step2Speed; minVal = 1; maxVal = 1000; step = 10; break;   // P2 gauche
-    case 4: value = &params.step2Temp; minVal = 0; maxVal = 1500; step = 10; break;    // P2 centre
-    case 5: value = &params.step2Wait; minVal = 0; maxVal = 999; step = 5; break;      // P2 droite
+    case 4: value = &params.step2Speed; minVal = 1; maxVal = 1000; step = 10; break;   // P2 gauche
+    case 5: value = &params.step2Temp; minVal = 0; maxVal = 1500; step = 10; break;    // P2 centre
+    case 6: value = &params.step2Wait; minVal = 0; maxVal = 999; step = 5; break;      // P2 droite
     // Phase 3
-    case 6: value = &params.step3Speed; minVal = 1; maxVal = 1000; step = 10; break;   // P3 gauche
-    case 7: value = &params.step3Temp; minVal = 0; maxVal = 1500; step = 10; break;    // P3 centre
-    case 8: value = &params.step3Wait; minVal = 0; maxVal = 999; step = 5; break;      // P3 droite
+    case 7: value = &params.step3Speed; minVal = 1; maxVal = 1000; step = 10; break;   // P3 gauche
+    case 8: value = &params.step3Temp; minVal = 0; maxVal = 1500; step = 10; break;    // P3 centre
+    case 9: value = &params.step3Wait; minVal = 0; maxVal = 999; step = 5; break;      // P3 droite
     // Cooldown
-    case 9: value = &params.step4Speed; minVal = 1; maxVal = 1000; step = 10; break;   // Cool gauche
-    case 10: value = &params.step4Target; minVal = 0; maxVal = 1000; step = 10; break; // Cool droite
+    case 10: value = &params.step4Speed; minVal = 1; maxVal = 1000; step = 10; break;  // Cool gauche
+    case 11: value = &params.step4Target; minVal = 0; maxVal = 1000; step = 10; break; // Cool droite
     default: return;
   }
   
@@ -555,11 +556,6 @@ uint8_t tempToUint8(float temp) {
   if (temp < 0) return 0;
   if (temp > 1280) return 255;
   return (uint8_t)(temp * 255.0 / 1280.0);
-}
-
-// Convertit un uint8_t en température float
-float uint8ToTemp(uint8_t value) {
-  return (float)value * 1280.0 / 255.0;
 }
 
 void updateGraphData(unsigned long currentMillis, float temp) {

@@ -49,36 +49,36 @@ void drawProgOffScreen() {
   
   // Phase 1 - Ligne 1
   u8g2.drawStr(0, 22, "P1:");
-  drawParamInline(18, 22, "", params.step1Speed, "C/h", 0);
-  drawParamInline(60, 22, ">", params.step1Temp, "C", 1);
-  drawParamInline(105, 22, "", params.step1Wait, "m", 2);
+  drawParamInline(18, 22, "", params.step1Speed, "C/h", 1);
+  drawParamInline(60, 22, ">", params.step1Temp, "C", 2);
+  drawParamInline(105, 22, "", params.step1Wait, "m", 3);
   
   // Phase 2 - Ligne 2
   u8g2.drawStr(0, 34, "P2:");
-  drawParamInline(18, 34, "", params.step2Speed, "C/h", 3);
-  drawParamInline(60, 34, ">", params.step2Temp, "C", 4);
-  drawParamInline(105, 34, "", params.step2Wait, "m", 5);
+  drawParamInline(18, 34, "", params.step2Speed, "C/h", 4);
+  drawParamInline(60, 34, ">", params.step2Temp, "C", 5);
+  drawParamInline(105, 34, "", params.step2Wait, "m", 6);
   
   // Phase 3 - Ligne 3
   u8g2.drawStr(0, 46, "P3:");
-  drawParamInline(18, 46, "", params.step3Speed, "C/h", 6);
-  drawParamInline(60, 46, ">", params.step3Temp, "C", 7);
-  drawParamInline(105, 46, "", params.step3Wait, "m", 8);
+  drawParamInline(18, 46, "", params.step3Speed, "C/h", 7);
+  drawParamInline(60, 46, ">", params.step3Temp, "C", 8);
+  drawParamInline(105, 46, "", params.step3Wait, "m", 9);
   
   // Cooldown - Ligne 4
   u8g2.drawStr(0, 58, "Cool:");
-  drawParamInline(30, 58, "", params.step4Speed, "C/h", 9);
-  drawParamInline(80, 58, "<", params.step4Target, "C", 10);
+  drawParamInline(30, 58, "", params.step4Speed, "C/h", 10);
+  drawParamInline(80, 58, "<", params.step4Target, "C", 11);
   
-  // Settings en haut à droite
+  // Settings en haut à droite (maintenant index 0)
   if (tempFailActive) {
     u8g2.drawStr(90, 10, "WARN");
   } else {
-    if (selectedParam == 11 && editMode == NAV_MODE) {
+    if (selectedParam == 0 && editMode == NAV_MODE) {
       // Cadre de sélection autour de "Settings"
       u8g2.drawFrame(73, 0, 55, 12);
       u8g2.drawStr(75, 10, "Settings");
-    } else if (selectedParam == 11 && editMode == EDIT_MODE) {
+    } else if (selectedParam == 0 && editMode == EDIT_MODE) {
       // Inversion vidéo pour "Settings"
       u8g2.setDrawColor(1);
       u8g2.drawBox(73, 0, 55, 12);
@@ -451,21 +451,18 @@ void drawGraph() {
   // Écran de graphe : affiche la courbe de consigne et les points mesurés
   u8g2.setFont(u8g2_font_6x10_tf);
   
-  // Titre
-  u8g2.drawStr(0, 8, "Graph");
-  
-  // Définir la zone de graphe : 10px de marge en haut pour titre, 54px de hauteur
-  const int GRAPH_X = 10;
-  const int GRAPH_Y = 10;
-  const int GRAPH_WIDTH = 118;
-  const int GRAPH_HEIGHT = 50;
+  // Définir la zone de graphe : agrandie pour utiliser tout l'écran
+  const int GRAPH_X = 2;
+  const int GRAPH_Y = 2;
+  const int GRAPH_WIDTH = 124;
+  const int GRAPH_HEIGHT = 60;
   
   // Dessiner le cadre du graphe
   u8g2.drawFrame(GRAPH_X - 1, GRAPH_Y - 1, GRAPH_WIDTH + 2, GRAPH_HEIGHT + 2);
   
   // Afficher les valeurs résultantes du PID verticalement, décalés de 3px vers la droite
   // Position X : GRAPH_X + 1 = 11 (décalé de 3px depuis x=8)
-  const int PID_X = GRAPH_X + 1;
+  const int PID_X = GRAPH_X + 2;
   
   // Cache des valeurs PID résultantes avec mise à jour toutes les secondes
   static float cachedP = 0.0;
@@ -486,20 +483,20 @@ void drawGraph() {
   char floatBuf[8];
   char pidBuf[12];
   
-  // Terme P sur la première ligne (Y = 20)
+  // Terme P sur la première ligne (Y = 10)
   dtostrf(cachedP, 4, 1, floatBuf); // 4 caractères total, 1 décimale (ex: "12.5" ou "-3.2")
   snprintf(pidBuf, 12, "P:%s", floatBuf);
-  u8g2.drawStr(PID_X, 20, pidBuf);
+  u8g2.drawStr(PID_X, 10, pidBuf);
   
-  // Terme I sur la deuxième ligne (Y = 30)
+  // Terme I sur la deuxième ligne (Y = 20)
   dtostrf(cachedI, 4, 1, floatBuf);
   snprintf(pidBuf, 12, "I:%s", floatBuf);
-  u8g2.drawStr(PID_X, 30, pidBuf);
+  u8g2.drawStr(PID_X, 20, pidBuf);
   
-  // Terme D sur la troisième ligne (Y = 40)
+  // Terme D sur la troisième ligne (Y = 30)
   dtostrf(cachedD, 4, 1, floatBuf);
   snprintf(pidBuf, 12, "D:%s", floatBuf);
-  u8g2.drawStr(PID_X, 40, pidBuf);
+  u8g2.drawStr(PID_X, 30, pidBuf);
   
   // Calculer la durée totale théorique du programme (AVEC les temps d'attente/paliers)
   float startTemp = 20.0; // Température de départ approximative
@@ -590,15 +587,12 @@ void drawGraph() {
       if (y < GRAPH_Y) y = GRAPH_Y;
       if (y > GRAPH_Y + GRAPH_HEIGHT - 1) y = GRAPH_Y + GRAPH_HEIGHT - 1;
       
-      // Dessiner un petit carré 2×2 pour le point
-      u8g2.drawBox(x - 1, y - 1, 2, 2);
+      
+      u8g2.drawBox(x - 1, y - 1, 2, 2);  // Carré de 2×2 pixels
     }
   }
   
-  // Afficher les valeurs de temps en bas (0 et durée totale)
-  u8g2.drawStr(GRAPH_X, 64, "0");
-  
-  // Afficher la durée totale (en heures si > 60min, sinon en minutes)
+  // Afficher la durée totale en bas à gauche (en heures si > 60min, sinon en minutes)
   if (maxTime >= 3600) {
     snprintf(sharedBuffer, 20, "%dh%02d", maxTime / 3600, (maxTime % 3600) / 60);
   } else {
@@ -607,8 +601,8 @@ void drawGraph() {
   int maxTimeStrWidth = strlen(sharedBuffer) * 6;
   u8g2.drawStr(GRAPH_X + GRAPH_WIDTH - maxTimeStrWidth, 64, sharedBuffer);
   
-  // Afficher la température max en haut à droite du graphe
+  // Afficher la température max en haut à droite (aligné dynamiquement)
   snprintf(sharedBuffer, 20, "%dC", (int)tempMax);
   int tempMaxStrWidth = strlen(sharedBuffer) * 6;
-  u8g2.drawStr(GRAPH_X + GRAPH_WIDTH - tempMaxStrWidth + 10, GRAPH_Y + 8, sharedBuffer);
+  u8g2.drawStr(128 - tempMaxStrWidth, GRAPH_Y + 8, sharedBuffer);
 }
