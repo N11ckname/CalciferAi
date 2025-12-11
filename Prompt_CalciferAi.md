@@ -215,6 +215,9 @@ Here is the list of variables to use, with their role:
 
 - Always use functions that do not stop the program like `millis()` to maintain maximum fluidity. Avoid using the `delay()` function.
 - Do not exceed **31,232 bytes** for the program
+- **Float to String Conversion:** On Arduino, `snprintf()` with `%f` format specifier is not always supported or may produce "?" characters. **Always use `dtostrf()` function** to convert float values to strings before using them with `snprintf()`.
+  - Example: `dtostrf(floatValue, 3, 1, buffer);` converts float to string with 3 total characters and 1 decimal place
+  - Then use: `snprintf(finalBuffer, size, "Label:%s", buffer);`
 
 ## Additional Specifications (Answered Requirements)
 

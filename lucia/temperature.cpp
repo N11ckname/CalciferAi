@@ -29,6 +29,11 @@ int lastError = 0;          // Scaled by 100
 int lastPowerHold = 0;      // 0-10000 (scaled by 100)
 unsigned long lastPIDUpdate = 0;
 
+// PID Components (valeurs résultantes du dernier calcul)
+float pidProportional = 0.0;
+float pidIntegral = 0.0;
+float pidDerivative = 0.0;
+
 void initTemperatureControl() {
   pinMode(PIN_RELAY, OUTPUT);
   pinMode(PIN_LED, OUTPUT);
@@ -148,7 +153,7 @@ void updateTemperatureControl(float currentTemp, float targetTemp, bool enabled,
   int error = (int)((targetTemp - currentTemp) * 100);
   
   // Calcul du terme proportionnel (P)
-  float proportional = KP * (error / 100.0);
+  pidProportional = KP * (error / 100.0);
   
   // Calcul du terme intégral (I) avec accumulation
   integralError += (int)(error * dt);
@@ -158,17 +163,17 @@ void updateTemperatureControl(float currentTemp, float targetTemp, bool enabled,
   if (integralError > maxIntegral) integralError = maxIntegral;
   if (integralError < -maxIntegral) integralError = -maxIntegral;
   
-  float integral = KI * (integralError / 100.0);
+  pidIntegral = KI * (integralError / 100.0);
   
   // Calcul du terme dérivé (D)
   // Mesure la vitesse de changement de l'erreur pour anticiper les variations
-  float derivative = 0.0;
+  pidDerivative = 0.0;
   if (dt > 0.0 && dt < 2.0) {  // Calculer seulement si dt est valide
-    derivative = KD * ((error - lastError) / 100.0) / dt;
+    pidDerivative = KD * ((error - lastError) / 100.0) / dt;
   }
   
   // Calculer la nouvelle puissance de sortie PID complet (0-10000, scalé x100)
-  int newPowerHoldScaled = (int)((proportional + integral + derivative) * 100);
+  int newPowerHoldScaled = (int)((pidProportional + pidIntegral + pidDerivative) * 100);
   
   // Limiter le taux de changement de puissance (sécurité four)
   // Évite les variations brutales qui pourraient endommager les résistances
@@ -197,5 +202,18 @@ void setRelay(bool state) {
 
 int getPowerHold() {
   return (int)powerHold;
+}
+
+// Getters pour les composantes PID (valeurs résultantes)
+float getPIDProportional() {
+  return pidProportional;
+}
+
+float getPIDIntegral() {
+  return pidIntegral;
+}
+
+float getPIDDerivative() {
+  return pidDerivative;
 }
 

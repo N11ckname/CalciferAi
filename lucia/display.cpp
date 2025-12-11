@@ -70,21 +70,24 @@ void drawProgOffScreen() {
   drawParamInline(30, 58, "", params.step4Speed, "C/h", 9);
   drawParamInline(80, 58, "<", params.step4Target, "C", 10);
   
-  // Icône Settings en haut à droite
+  // Settings en haut à droite
   if (tempFailActive) {
     u8g2.drawStr(90, 10, "WARN");
   } else {
     if (selectedParam == 11 && editMode == NAV_MODE) {
-      u8g2.drawFrame(113, 0, 15, 12);
-      u8g2.drawStr(115, 10, "S");
+      // Cadre de sélection autour de "Settings"
+      u8g2.drawFrame(73, 0, 55, 12);
+      u8g2.drawStr(75, 10, "Settings");
     } else if (selectedParam == 11 && editMode == EDIT_MODE) {
+      // Inversion vidéo pour "Settings"
       u8g2.setDrawColor(1);
-      u8g2.drawBox(113, 0, 15, 12);
+      u8g2.drawBox(73, 0, 55, 12);
       u8g2.setDrawColor(0);
-      u8g2.drawStr(115, 10, "S");
+      u8g2.drawStr(75, 10, "Settings");
       u8g2.setDrawColor(1);
     } else {
-      u8g2.drawStr(115, 10, "S");
+      // Affichage normal de "Settings"
+      u8g2.drawStr(75, 10, "Settings");
     }
   }
 }
@@ -303,21 +306,30 @@ void drawProgOnScreen(unsigned long currentMillis) {
   }
   u8g2.drawStr(0, 20, sharedBuffer);
   
+  // Ligne de séparation horizontale
+  u8g2.drawHLine(0, 22, 128);
+  
   // Temp Read (température de la sonde)
+  u8g2.drawStr(0, 31, "Temp Read");
   if (isnan(currentTemp)) {
-    snprintf(sharedBuffer, 20, "Temp Read:?C");
+    snprintf(sharedBuffer, 20, "?C");
   } else {
-    snprintf(sharedBuffer, 20, "Temp Read:%dC", (int)(currentTemp + 0.5));
+    snprintf(sharedBuffer, 20, "%dC", (int)(currentTemp + 0.5));
   }
-  u8g2.drawStr(0, 30, sharedBuffer);
+  int tempReadWidth = strlen(sharedBuffer) * 6;
+  u8g2.drawStr(128 - tempReadWidth, 31, sharedBuffer);
   
   // Temp Target (température cible calculée)
-  snprintf(sharedBuffer, 20, "Temp Target:%dC", (int)(targetTemp + 0.5));
-  u8g2.drawStr(0, 40, sharedBuffer);
+  u8g2.drawStr(0, 42, "Temp Target");
+  snprintf(sharedBuffer, 20, "%dC", (int)(targetTemp + 0.5));
+  int tempTargetWidth = strlen(sharedBuffer) * 6;
+  u8g2.drawStr(128 - tempTargetWidth, 42, sharedBuffer);
   
   // Heat Power (PowerHold)
-  snprintf(sharedBuffer, 20, "Heat Power:%d%%", powerHold);
-  u8g2.drawStr(0, 50, sharedBuffer);
+  u8g2.drawStr(0, 53, "Heat Power");
+  snprintf(sharedBuffer, 20, "%d%%", powerHold);
+  int heatPowerWidth = strlen(sharedBuffer) * 6;
+  u8g2.drawStr(128 - heatPowerWidth, 53, sharedBuffer);
   
   // Phase : pourcentage de progression de la phase en cours
   int phasePercent = 0;
@@ -350,8 +362,10 @@ void drawProgOnScreen(unsigned long currentMillis) {
       }
     }
   }
-  snprintf(sharedBuffer, 20, "Phase:%d%%", phasePercent > 100 ? 100 : phasePercent);
-  u8g2.drawStr(0, 60, sharedBuffer);
+  u8g2.drawStr(0, 63, "Phase");
+  snprintf(sharedBuffer, 20, "%d%%", phasePercent > 100 ? 100 : phasePercent);
+  int phaseWidth = strlen(sharedBuffer) * 6;
+  u8g2.drawStr(128 - phaseWidth, 63, sharedBuffer);
 }
 
 // Convertit un uint8_t en température float (pour affichage)
@@ -448,6 +462,44 @@ void drawGraph() {
   
   // Dessiner le cadre du graphe
   u8g2.drawFrame(GRAPH_X - 1, GRAPH_Y - 1, GRAPH_WIDTH + 2, GRAPH_HEIGHT + 2);
+  
+  // Afficher les valeurs résultantes du PID verticalement, décalés de 3px vers la droite
+  // Position X : GRAPH_X + 1 = 11 (décalé de 3px depuis x=8)
+  const int PID_X = GRAPH_X + 1;
+  
+  // Cache des valeurs PID résultantes avec mise à jour toutes les secondes
+  static float cachedP = 0.0;
+  static float cachedI = 0.0;
+  static float cachedD = 0.0;
+  static unsigned long lastPidUpdate = 0;
+  unsigned long currentMillis = millis();
+  
+  // Mettre à jour le cache toutes les 1000ms
+  if (currentMillis - lastPidUpdate >= 1000) {
+    cachedP = getPIDProportional();
+    cachedI = getPIDIntegral();
+    cachedD = getPIDDerivative();
+    lastPidUpdate = currentMillis;
+  }
+  
+  // Buffer pour conversion float → string (dtostrf pour compatibilité Arduino)
+  char floatBuf[8];
+  char pidBuf[12];
+  
+  // Terme P sur la première ligne (Y = 20)
+  dtostrf(cachedP, 4, 1, floatBuf); // 4 caractères total, 1 décimale (ex: "12.5" ou "-3.2")
+  snprintf(pidBuf, 12, "P:%s", floatBuf);
+  u8g2.drawStr(PID_X, 20, pidBuf);
+  
+  // Terme I sur la deuxième ligne (Y = 30)
+  dtostrf(cachedI, 4, 1, floatBuf);
+  snprintf(pidBuf, 12, "I:%s", floatBuf);
+  u8g2.drawStr(PID_X, 30, pidBuf);
+  
+  // Terme D sur la troisième ligne (Y = 40)
+  dtostrf(cachedD, 4, 1, floatBuf);
+  snprintf(pidBuf, 12, "D:%s", floatBuf);
+  u8g2.drawStr(PID_X, 40, pidBuf);
   
   // Calculer la durée totale théorique du programme (AVEC les temps d'attente/paliers)
   float startTemp = 20.0; // Température de départ approximative

@@ -30,5 +30,10 @@ void setRelay(bool state);
 int getPowerHold();
 void resetPID();
 
+// PID Components Getters (valeurs résultantes du calcul PID)
+float getPIDProportional();  // Retourne la valeur du terme P
+float getPIDIntegral();      // Retourne la valeur du terme I
+float getPIDDerivative();    // Retourne la valeur du terme D
+
 #endif
 
