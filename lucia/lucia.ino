@@ -37,10 +37,11 @@ FiringParams params = {100, 50, 5, 570, 250, 15, 1100, 200, 20, 150, 200};
 FiringParams paramsBackup; // Sauvegarde pour détecter les changements
 
 // ===== SETTINGS PARAMETERS =====
-SettingsParams settings = {1000, 2.0, 0.5, 0.0}; // pcycle (ms), kp, ki, kd
+SettingsParams settings = {1000, 2.0, 0.5, 0.0, 10}; // pcycle (ms), kp, ki, kd, maxDelta (°C)
 SettingsParams settingsBackup; // Sauvegarde pour détecter les changements
 int selectedSetting = 0;
-const int NUM_SETTINGS = 5; // Heat Cycle, Kp, Ki, Kd, Exit
+const int NUM_SETTINGS = 6; // Heat Cycle, Kp, Ki, Kd, Max delta, Exit
+int settingsScrollOffset = 0; // Scroll pour l'écran settings
 
 // ===== UI PARAMETERS =====
 EditMode editMode = NAV_MODE;
@@ -57,10 +58,7 @@ unsigned long tempFailStartTime = 0;
 bool tempFailActive = false;
 unsigned long lastTempRead = 0;
 float cachedTemperature = NAN;
-#ifdef ENABLE_GRAPH
 unsigned long lastGraphUpdate = 0;
-#define GRAPH_UPDATE_INTERVAL 30000  // 30 secondes entre chaque point
-#endif
 
 // ===== EEPROM PROTECTION =====
 unsigned long lastEEPROMWrite = 0;
@@ -82,17 +80,15 @@ bool plateauReached = false;
 #define EEPROM_ADDR_PARAMS 2
 
 // ===== GRAPH DATA =====
-// Désactivé pour économiser RAM sur Arduino Uno (512 octets)
-// Pour activer : décommentez la ligne ci-dessous (nécessite Arduino Mega ou optimisations)
-// #define ENABLE_GRAPH
-#ifdef ENABLE_GRAPH
-  #define GRAPH_SIZE 64
-  float graphActual[GRAPH_SIZE];
-  float graphTarget[GRAPH_SIZE];
-  int graphIndex = 0;
-#else
-  int graphIndex = 0;  // Dummy variable
-#endif
+// Nouvelle implémentation optimisée avec décimation adaptative (384 octets)
+// Compression : uint8_t pour températures (0-255 = 0-1280°C, résolution 5°C)
+uint8_t graphTempRead[GRAPH_SIZE];    // Température mesurée (96 octets)
+uint8_t graphTempTarget[GRAPH_SIZE];  // Température consigne (96 octets)
+uint16_t graphTimeStamps[GRAPH_SIZE]; // Temps en secondes depuis début programme (192 octets)
+uint8_t graphIndex = 0;               // Index du prochain point à écrire
+uint8_t graphCount = 0;               // Nombre de points actuellement stockés
+uint16_t samplingInterval = 2;        // Intervalle d'échantillonnage en secondes (commence à 2s)
+uint16_t nextSamplingTime = 2;        // Prochain temps d'échantillonnage (en secondes)
 
 void setup() {
   // Initialize pins
@@ -224,9 +220,7 @@ void loop() {
   // Mise à jour de l'état du programme
   if (progState == PROG_ON) {
     updateProgram(currentMillis, temp);
-    #ifdef ENABLE_GRAPH
     updateGraphData(currentMillis, temp);
-    #endif
   }
   
   // Mise à jour de l'affichage
@@ -246,9 +240,7 @@ void handleButtons(unsigned long currentMillis) {
   if (encoderButton == LOW && lastEncoderButton == HIGH) {
     // Appui détecté - exécuter l'action immédiatement
     if (progState == PROG_ON) {
-      #ifdef ENABLE_GRAPH
       showGraph = !showGraph;
-      #endif
     } else if (progState == PROG_OFF) {
       if (selectedParam == 11 && editMode == NAV_MODE) {
         progState = SETTINGS;
@@ -258,7 +250,7 @@ void handleButtons(unsigned long currentMillis) {
         toggleEditMode();
       }
     } else if (progState == SETTINGS) {
-      if (selectedSetting == 4) {
+      if (selectedSetting == 5) {
         progState = PROG_OFF;
         selectedParam = 0;
         editMode = NAV_MODE;
@@ -292,10 +284,11 @@ void handleEncoder() {
     if (progState == SETTINGS) {
       // Gérer l'encodeur dans l'écran settings
       if (editMode == NAV_MODE) {
-        // Navigate between settings
+        // Navigate between settings (sans boucler)
         selectedSetting += delta;
-        if (selectedSetting < 0) selectedSetting = NUM_SETTINGS - 1;
-        if (selectedSetting >= NUM_SETTINGS) selectedSetting = 0;
+        // Limiter aux bornes sans boucler
+        if (selectedSetting < 0) selectedSetting = 0;
+        if (selectedSetting >= NUM_SETTINGS) selectedSetting = NUM_SETTINGS - 1;
       } else {
         // Edit selected setting
         editSetting(delta);
@@ -303,11 +296,11 @@ void handleEncoder() {
     } else if (progState == PROG_OFF) {
       // Gérer l'encodeur dans l'écran phase 0
       if (editMode == NAV_MODE) {
-        // Navigate between parameters (0-10 pour les paramètres, 11 pour l'icône settings)
+        // Navigate between parameters (sans boucler)
         selectedParam += delta;
-        if (selectedParam < 0) selectedParam = NUM_PARAMS - 1;
-        if (selectedParam >= NUM_PARAMS) selectedParam = 0;
-        // selectedParam == 11 correspond à l'icône settings
+        // Limiter aux bornes sans boucler
+        if (selectedParam < 0) selectedParam = 0;
+        if (selectedParam >= NUM_PARAMS) selectedParam = NUM_PARAMS - 1;
       } else {
         // Edit selected parameter (mais pas l'icône settings)
         if (selectedParam < NUM_PARAMS - 1) {
@@ -368,7 +361,12 @@ void editSetting(int delta) {
       if (KD > 10.0) KD = 10.0;
       settings.kd = KD; // Synchroniser settings avec la valeur réelle
       break;
-    case 4: // Exit - ne rien faire, géré par le bouton
+    case 4: // Max delta
+      settings.maxDelta += delta * 1; // Incrément de 1°C
+      if (settings.maxDelta < 1) settings.maxDelta = 1;
+      if (settings.maxDelta > 50) settings.maxDelta = 50;
+      break;
+    case 5: // Exit - ne rien faire, géré par le bouton
       break;
   }
 }
@@ -395,7 +393,8 @@ void saveSettingsToEEPROMIfChanged() {
   if (settings.pcycle != settingsBackup.pcycle ||
       settings.kp != settingsBackup.kp ||
       settings.ki != settingsBackup.ki ||
-      settings.kd != settingsBackup.kd) {
+      settings.kd != settingsBackup.kd ||
+      settings.maxDelta != settingsBackup.maxDelta) {
     saveSettingsToEEPROM();
     settingsBackup = settings; // Mettre à jour le backup
   }
@@ -404,15 +403,45 @@ void saveSettingsToEEPROMIfChanged() {
 void toggleProgState() {
   if (progState == PROG_OFF) {
     progState = PROG_ON;
-    currentPhase = PHASE_1;
     programStartTime = millis();
     phaseStartTime = millis();
     plateauReached = false;
-    targetTemp = readTemperature();
-    #ifdef ENABLE_GRAPH
+    
+    // Lire la température actuelle pour démarrage intelligent
+    float currentTemp = readTemperature();
+    targetTemp = currentTemp;
+    
+    // Détection automatique de la phase de départ basée sur la température actuelle
+    if (!isnan(currentTemp) && currentTemp > 0) {
+      if (currentTemp < params.step1Temp) {
+        // Four froid ou en dessous de la cible Phase 1 : démarrer en Phase 1
+        currentPhase = PHASE_1;
+      } else if (currentTemp < params.step2Temp) {
+        // Four déjà chaud (entre step1 et step2) : démarrer en Phase 2
+        currentPhase = PHASE_2;
+        // Ajuster targetTemp pour continuer la montée depuis la température actuelle
+        targetTemp = currentTemp;
+      } else if (currentTemp < params.step3Temp) {
+        // Four très chaud (entre step2 et step3) : démarrer en Phase 3
+        currentPhase = PHASE_3;
+        targetTemp = currentTemp;
+      } else {
+        // Four à température finale ou plus : démarrer en cooldown
+        currentPhase = PHASE_4_COOLDOWN;
+        targetTemp = currentTemp;
+      }
+    } else {
+      // Erreur de lecture ou température invalide : démarrer en Phase 1 par sécurité
+      currentPhase = PHASE_1;
+      targetTemp = 20.0; // Température par défaut
+    }
+    
+    // Réinitialiser les données du graphe
     graphIndex = 0;
+    graphCount = 0;
+    samplingInterval = 5;
+    nextSamplingTime = 5;
     lastGraphUpdate = millis();
-    #endif
     resetPID();
   } else {
     progState = PROG_OFF;
@@ -510,7 +539,8 @@ float calculateCoolingTarget(float startTemp, int targetTemp, int speed, unsigne
 }
 
 bool checkPhaseComplete(float currentTemp, int phaseTemp, bool &reached, unsigned long &plateauStart, int waitMinutes, unsigned long currentMillis) {
-  if (!reached && currentTemp >= (phaseTemp - 5) && currentTemp >= phaseTemp) {
+  // Vérifier si la température est dans la tolérance (maxDelta en dessous) ET au-dessus de la cible
+  if (!reached && currentTemp >= (phaseTemp - settings.maxDelta) && currentTemp >= phaseTemp) {
     reached = true;
     plateauStart = currentMillis;
   }
@@ -520,38 +550,67 @@ bool checkPhaseComplete(float currentTemp, int phaseTemp, bool &reached, unsigne
   return false;
 }
 
-#ifdef ENABLE_GRAPH
-void updateGraphData(unsigned long currentMillis, float temp) {
-  // Enregistrer un point toutes les 30 secondes pour couvrir 32 minutes avec 64 points
-  if (currentMillis - lastGraphUpdate >= GRAPH_UPDATE_INTERVAL) {
-    lastGraphUpdate = currentMillis;
-    
-    if (graphIndex < GRAPH_SIZE) {
-      graphActual[graphIndex] = temp;
-      graphTarget[graphIndex] = targetTemp;
-      graphIndex++;
-    } else {
-      // Décaler les données vers la gauche pour garder les plus récentes
-      for (int i = 0; i < GRAPH_SIZE - 1; i++) {
-        graphActual[i] = graphActual[i + 1];
-        graphTarget[i] = graphTarget[i + 1];
-      }
-      graphActual[GRAPH_SIZE - 1] = temp;
-      graphTarget[GRAPH_SIZE - 1] = targetTemp;
-    }
-  }
+// Convertit une température float en uint8_t (0-255 = 0-1280°C, résolution ~5°C)
+uint8_t tempToUint8(float temp) {
+  if (temp < 0) return 0;
+  if (temp > 1280) return 255;
+  return (uint8_t)(temp * 255.0 / 1280.0);
 }
-#endif
+
+// Convertit un uint8_t en température float
+float uint8ToTemp(uint8_t value) {
+  return (float)value * 1280.0 / 255.0;
+}
+
+void updateGraphData(unsigned long currentMillis, float temp) {
+  // Calculer le temps écoulé depuis le début du programme (en secondes)
+  uint16_t elapsedSeconds = (currentMillis - programStartTime) / 1000;
+  
+  // Vérifier si il est temps d'enregistrer un nouveau point
+  if (elapsedSeconds < nextSamplingTime) {
+    return; // Pas encore temps d'enregistrer
+  }
+  
+  // Enregistrer le point
+  graphTempRead[graphIndex] = tempToUint8(temp);
+  graphTempTarget[graphIndex] = tempToUint8(targetTemp);
+  graphTimeStamps[graphIndex] = elapsedSeconds;
+  
+  // Avancer l'index (buffer circulaire)
+  graphIndex++;
+  if (graphIndex >= GRAPH_SIZE) {
+    graphIndex = 0; // Revenir au début (écrasera les anciennes données)
+  }
+  
+  // Incrémenter le compteur (max GRAPH_SIZE)
+  if (graphCount < GRAPH_SIZE) {
+    graphCount++;
+  }
+  
+  // Calculer le prochain temps d'échantillonnage
+  nextSamplingTime = elapsedSeconds + samplingInterval;
+  
+  // Décimation adaptative : augmenter l'intervalle d'échantillonnage progressivement
+  // Stratégie : 5s → 10s → 15s → ... → 60s max (augmente tous les 20 points)
+  static uint8_t pointsSinceLastIncrease = 0;
+  pointsSinceLastIncrease++;
+  
+  if (pointsSinceLastIncrease >= 20 && samplingInterval < 60) {
+    // Augmenter l'intervalle de 5 secondes (max 60 secondes)
+    samplingInterval += 5;
+    if (samplingInterval > 60) samplingInterval = 60;
+    pointsSinceLastIncrease = 0;
+  }
+  
+  lastGraphUpdate = currentMillis;
+}
 
 void updateDisplay(unsigned long currentMillis) {
   u8g2.firstPage();
   do {
-    #ifdef ENABLE_GRAPH
-    if (showGraph) {
+    if (showGraph && progState == PROG_ON) {
       drawGraph();
-    } else 
-    #endif
-    if (tempFailActive && (currentMillis - tempFailStartTime > TEMP_FAIL_TIMEOUT)) {
+    } else if (tempFailActive && (currentMillis - tempFailStartTime > TEMP_FAIL_TIMEOUT)) {
       // Afficher l'erreur critique de température
       u8g2.setFont(u8g2_font_6x10_tf);
       u8g2.drawStr(0, 10, "ERROR!");
@@ -625,6 +684,7 @@ void loadFromEEPROM() {
     if (isnan(settings.ki) || settings.ki < 0.0 || settings.ki > 10.0) settings.ki = 0.5;
     if (isnan(settings.kd) || settings.kd < 0.0 || settings.kd > 10.0) settings.kd = 0.0;
     if (settings.pcycle < 100 || settings.pcycle > 10000) settings.pcycle = 1000;
+    if (settings.maxDelta < 1 || settings.maxDelta > 50) settings.maxDelta = 10;
     // Appliquer les settings chargés (et validés)
     CYCLE_LENGTH = settings.pcycle;
     KP = settings.kp;

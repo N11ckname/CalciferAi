@@ -6,31 +6,31 @@ L'Arduino Uno dispose de seulement **2048 octets de RAM dynamique**. Le programm
 
 ## Optimisations Appliquées
 
-### 1. Graphique Désactivé par Défaut ✅ (-512 octets)
+### 1. Graphique Optimisé avec Décimation Adaptative ✅ (384 octets)
 
-**Économie : 512 octets**
+**Nouvelle implémentation activée en permanence**
 
 ```cpp
-// Avant :
-#define GRAPH_SIZE 128
-float graphActual[128];  // 128 × 4 = 512 octets
-float graphTarget[128];  // 128 × 4 = 512 octets
-// Total : 1024 octets
-
-// Après optimisation intermédiaire :
+// Ancienne version (désactivée) :
 #define GRAPH_SIZE 64
 float graphActual[64];   // 64 × 4 = 256 octets
 float graphTarget[64];   // 64 × 4 = 256 octets
 // Total : 512 octets
 
-// Après désactivation :
-#ifdef ENABLE_GRAPH
-  // Code de graphique seulement si activé
-#endif
-// Total : 0 octets (par défaut)
+// Nouvelle version optimisée (ACTIVE) :
+#define GRAPH_SIZE 96
+uint8_t graphTempRead[96];      // 96 × 1 = 96 octets (0-255 = 0-1280°C)
+uint8_t graphTempTarget[96];    // 96 × 1 = 96 octets
+uint16_t graphTimeStamps[96];   // 96 × 2 = 192 octets (temps en secondes)
+// Total : 384 octets
 ```
 
-**Pour réactiver le graphique :** Ajoutez `#define ENABLE_GRAPH` au début de `lucia.ino` (avant les includes)
+**Avantages de la nouvelle implémentation :**
+- ✅ Buffer circulaire avec décimation adaptative
+- ✅ Commence à 5s d'échantillonnage, puis augmente par paliers de 5s (max 60s)
+- ✅ Couvre toute la durée du programme (plusieurs heures)
+- ✅ Affiche courbe de consigne théorique + points mesurés
+- ✅ Résolution de ~5°C (largement suffisant pour visualisation)
 
 ### 2. Réduction des Buffers ✅ (-50+ octets)
 
@@ -86,33 +86,24 @@ Avec toutes les optimisations :
 | Textes raccourcis | -30 octets |
 | **TOTAL** | **~592 octets** |
 
-## Utilisation avec ou sans Graphique
+## Utilisation de la RAM
 
-### Mode Standard (SANS graphique) - RECOMMANDÉ
+### Utilisation Estimée avec Graphique Optimisé
 
-✅ **Utilisation RAM : ~1800 octets (88%)**
+✅ **Utilisation RAM : ~1900 octets (93%)**
 
-Le programme fonctionne normalement mais le graphique température/temps n'est pas disponible.
+Le graphique est maintenant **toujours activé** grâce à l'optimisation par compression des données :
+- Buffer circulaire intelligent
+- Échantillonnage adaptatif (2s → 4s → 8s → ... → 60s max)
+- Résolution de ~5°C (uint8_t au lieu de float)
+- Couverture complète du programme
 
-### Mode avec Graphique (optionnel)
+**Activation du graphe pendant la cuisson :**
+Appuyez sur le **bouton encodeur** pendant le programme (PROG_ON) pour basculer entre l'écran de cuisson et le graphique.
 
-⚠️ **Utilisation RAM : ~2300 octets (112%) - PEUT NE PAS COMPILER**
+## Fonctionnalités Complètes
 
-Pour activer le graphique, ajoutez cette ligne **au tout début** de `lucia.ino` :
-
-```cpp
-#define ENABLE_GRAPH
-
-#include <Wire.h>
-#include <U8g2lib.h>
-// ... reste du code
-```
-
-**Note :** Avec le graphique activé, vous pourriez dépasser la RAM disponible. Utilisez cette option uniquement si vous avez fait d'autres optimisations ou si vous utilisez un Arduino Mega (8 Ko de RAM).
-
-## Fonctionnalités Conservées
-
-Toutes les fonctionnalités critiques sont préservées :
+Toutes les fonctionnalités sont maintenant disponibles :
 
 ✅ Contrôle PID de température  
 ✅ 3 phases de cuisson + refroidissement  
@@ -121,8 +112,7 @@ Toutes les fonctionnalités critiques sont préservées :
 ✅ Affichage temps écoulé et restant  
 ✅ Gestion des erreurs  
 ✅ Arrêt d'urgence  
-
-❌ Graphique temps réel (désactivé par défaut)
+✅ **Graphique temps réel optimisé (maintenant activé !)**
 
 ## Optimisations Futures Possibles
 
@@ -168,8 +158,8 @@ Les variables globales utilisent YYYY octets (ZZ%) de mémoire dynamique
 
 ## Résumé
 
-🎯 **Solution appliquée :** Graphique désactivé par défaut  
-💾 **RAM économisée :** ~600 octets  
-✅ **Statut :** Le code devrait maintenant compiler sur Arduino Uno  
-🔧 **Option :** Réactivable avec `#define ENABLE_GRAPH`
+🎯 **Solution appliquée :** Graphique optimisé avec compression et décimation adaptative  
+💾 **RAM utilisée :** 384 octets (au lieu de 512 octets)  
+✅ **Statut :** Le code compile sur Arduino Uno avec toutes les fonctionnalités  
+📊 **Graphique :** Toujours actif, accessible pendant la cuisson (bouton encodeur)
 

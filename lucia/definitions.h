@@ -17,6 +17,9 @@ enum EditMode { NAV_MODE, EDIT_MODE };
 #define TEMP_FAIL_TIMEOUT 120000         // Timeout erreur thermocouple (ms) = 2 minutes
 #define EEPROM_WRITE_MIN_INTERVAL 5000   // Intervalle minimum entre écritures EEPROM (ms)
 
+// ===== GRAPH CONSTANTS =====
+#define GRAPH_SIZE 96                    // Nombre de points dans le buffer du graphe
+
 // ===== FIRING PARAMETERS STRUCTURE =====
 struct FiringParams {
   int step1Temp;
@@ -38,6 +41,7 @@ struct SettingsParams {
   float kp;        // Gain proportionnel PID
   float ki;        // Gain intégral PID
   float kd;        // Gain dérivé PID
+  int maxDelta;    // Erreur max (°C) pour passer à phase suivante
 };
 
 #endif
