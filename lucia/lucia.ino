@@ -382,7 +382,7 @@ void editSetting(int delta) {
       settings.kp = KP; // Synchroniser settings avec la valeur réelle
       break;
     case 2: // Ki - modifier directement la valeur réelle du PID
-      KI += delta * 0.1; // Incrément de 0.1
+      KI += delta * 0.01; // Incrément de 0.01
       if (KI < 0.0) KI = 0.0;
       if (KI > 10.0) KI = 10.0;
       settings.ki = KI; // Synchroniser settings avec la valeur réelle

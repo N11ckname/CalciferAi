@@ -120,7 +120,7 @@ void drawSettingsItem(int itemIndex, int y) {
       break;
     case 2: 
       label = "Ki"; 
-      dtostrf(KI, 4, 1, sharedBuffer); 
+      dtostrf(KI, 5, 2, sharedBuffer); 
       break;
     case 3: 
       label = "Kd"; 
