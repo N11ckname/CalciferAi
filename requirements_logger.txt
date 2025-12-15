@@ -1,0 +1,5 @@
+# Dépendances pour le logger Arduino LUCIA
+# Installation: pip install -r requirements_logger.txt
+
+pyserial>=3.5
+matplotlib>=3.5

@@ -11,14 +11,19 @@ enum Phase { PHASE_0, PHASE_1, PHASE_2, PHASE_3, PHASE_4_COOLDOWN };
 enum EditMode { NAV_MODE, EDIT_MODE };
 
 // ===== TIMING CONSTANTS =====
-#define TEMP_READ_INTERVAL 500           // Intervalle de lecture température (ms)
-#define DISPLAY_UPDATE_INTERVAL 100      // Intervalle de mise à jour de l'écran (ms)
-#define ENCODER_CHECK_INTERVAL 20        // Intervalle de vérification encodeur (ms) = 50Hz
-#define TEMP_FAIL_TIMEOUT 120000         // Timeout erreur thermocouple (ms) = 2 minutes
-#define EEPROM_WRITE_MIN_INTERVAL 5000   // Intervalle minimum entre écritures EEPROM (ms)
+#define TEMP_READ_INTERVAL 500
+#define DISPLAY_UPDATE_INTERVAL 100
+#define ENCODER_CHECK_INTERVAL 20
+#define TEMP_FAIL_TIMEOUT 120000
+#define EEPROM_WRITE_MIN_INTERVAL 10000
+
+// ===== FONCTIONNALITÉS OPTIONNELLES =====
+// Décommentez pour activer (voir ACTIVATION_FONCTIONNALITES.md pour détails)
+#define ENABLE_LOGGING  // Logging Serial (~250 octets) - Monitoring/Debug
+//#define ENABLE_GRAPH    // Graphe température (~800 octets) - Visualisation
 
 // ===== GRAPH CONSTANTS =====
-#define GRAPH_SIZE 96                    // Nombre de points dans le buffer du graphe
+#define GRAPH_SIZE 64  // Nombre de points (64 points = ~2-3h couverture)
 
 // ===== FIRING PARAMETERS STRUCTURE =====
 struct FiringParams {

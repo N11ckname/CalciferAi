@@ -58,7 +58,12 @@ unsigned long tempFailStartTime = 0;
 bool tempFailActive = false;
 unsigned long lastTempRead = 0;
 float cachedTemperature = NAN;
+#ifdef ENABLE_GRAPH
 unsigned long lastGraphUpdate = 0;
+#endif
+#ifdef ENABLE_LOGGING
+unsigned long lastDataLog = 0;
+#endif
 
 // ===== EEPROM PROTECTION =====
 unsigned long lastEEPROMWrite = 0;
@@ -67,11 +72,14 @@ bool eepromWriteAllowed = true;  // Permettre la première écriture au démarra
 // ===== BUTTON STATES =====
 bool lastEncoderButton = HIGH;
 bool lastPushButton = HIGH;
+#ifdef ENABLE_GRAPH
 bool showGraph = false;
+#endif
 bool criticalErrorActive = false;
 
 // ===== TEMPERATURE CONTROL =====
 float targetTemp = 0;
+float phaseStartTemp = 0;  // Température de départ de la phase en cours
 bool plateauReached = false;
 
 // ===== EEPROM ADDRESSES =====
@@ -80,17 +88,23 @@ bool plateauReached = false;
 #define EEPROM_ADDR_PARAMS 2
 
 // ===== GRAPH DATA =====
-// Nouvelle implémentation optimisée avec décimation adaptative (384 octets)
-// Compression : uint8_t pour températures (0-255 = 0-1280°C, résolution 5°C)
-uint8_t graphTempRead[GRAPH_SIZE];    // Température mesurée (96 octets)
-uint8_t graphTempTarget[GRAPH_SIZE];  // Température consigne (96 octets)
-uint16_t graphTimeStamps[GRAPH_SIZE]; // Temps en secondes depuis début programme (192 octets)
-uint8_t graphIndex = 0;               // Index du prochain point à écrire
-uint8_t graphCount = 0;               // Nombre de points actuellement stockés
-uint16_t samplingInterval = 2;        // Intervalle d'échantillonnage en secondes (commence à 2s)
-uint16_t nextSamplingTime = 2;        // Prochain temps d'échantillonnage (en secondes)
+#ifdef ENABLE_GRAPH
+// Implémentation optimisée avec décimation adaptative (256 octets)
+uint8_t graphTempRead[GRAPH_SIZE];
+uint8_t graphTempTarget[GRAPH_SIZE];
+uint16_t graphTimeStamps[GRAPH_SIZE];
+uint8_t graphIndex = 0;
+uint8_t graphCount = 0;
+uint16_t samplingInterval = 5;
+uint16_t nextSamplingTime = 5;
+#endif
 
 void setup() {
+  #ifdef ENABLE_LOGGING
+  Serial.begin(9600);
+  while (!Serial && millis() < 1000);
+  #endif
+  
   // Initialize pins
   pinMode(PIN_ENCODER_SW, INPUT_PULLUP);
   pinMode(PIN_PUSH_BUTTON, INPUT_PULLUP);
@@ -153,8 +167,10 @@ void setup() {
   // Initialize temperature control
   initTemperatureControl();
   
-  // Initial display
   updateDisplay(0);
+  #ifdef ENABLE_LOGGING
+  sendStartupLog();
+  #endif
 }
 
 void loop() {
@@ -210,17 +226,31 @@ void loop() {
   handleButtons(currentMillis);
   
   // Gestion de l'encodeur (intervalle optimisé pour réduire la charge CPU)
-  static unsigned long lastEncoderCheck = 0;
-  if ((progState == PROG_OFF || progState == SETTINGS) && !showGraph && 
-      (currentMillis - lastEncoderCheck >= ENCODER_CHECK_INTERVAL)) {
-    handleEncoder();
-    lastEncoderCheck = currentMillis;
+  #ifdef ENABLE_GRAPH
+  bool canUseEncoder = (progState == PROG_OFF || progState == SETTINGS) && !showGraph;
+  #else
+  bool canUseEncoder = (progState == PROG_OFF || progState == SETTINGS);
+  #endif
+  if (canUseEncoder) {
+    static unsigned long lastEncoderCheck = 0;
+    if (currentMillis - lastEncoderCheck >= ENCODER_CHECK_INTERVAL) {
+      handleEncoder();
+      lastEncoderCheck = currentMillis;
+    }
   }
   
   // Mise à jour de l'état du programme
   if (progState == PROG_ON) {
     updateProgram(currentMillis, temp);
+    #ifdef ENABLE_GRAPH
     updateGraphData(currentMillis, temp);
+    #endif
+    #ifdef ENABLE_LOGGING
+    if (currentMillis - lastDataLog >= 5000) {
+      sendDataLog(currentMillis, temp);
+      lastDataLog = currentMillis;
+    }
+    #endif
   }
   
   // Mise à jour de l'affichage
@@ -240,7 +270,9 @@ void handleButtons(unsigned long currentMillis) {
   if (encoderButton == LOW && lastEncoderButton == HIGH) {
     // Appui détecté - exécuter l'action immédiatement
     if (progState == PROG_ON) {
+      #ifdef ENABLE_GRAPH
       showGraph = !showGraph;
+      #endif
     } else if (progState == PROG_OFF) {
       if (selectedParam == 0 && editMode == NAV_MODE) {
         progState = SETTINGS;
@@ -372,82 +404,75 @@ void editSetting(int delta) {
 }
 
 void saveSettingsToEEPROM() {
-  // Protection temporelle : minimum 5 secondes entre écritures pour préserver l'EEPROM
   unsigned long currentMillis = millis();
-  if (!eepromWriteAllowed) {
-    // Vérifier si l'intervalle minimum est respecté
-    // La soustraction gère automatiquement le rollover de millis()
-    if (currentMillis - lastEEPROMWrite < EEPROM_WRITE_MIN_INTERVAL) {
-      return; // Intervalle insuffisant, écriture ignorée pour protéger l'EEPROM
-    }
-  }
-  
-  // Écrire les settings dans l'EEPROM (après la structure FiringParams)
+  if (!eepromWriteAllowed && (currentMillis - lastEEPROMWrite < EEPROM_WRITE_MIN_INTERVAL)) return;
   EEPROM.put(EEPROM_ADDR_PARAMS + sizeof(FiringParams), settings);
   lastEEPROMWrite = currentMillis;
-  eepromWriteAllowed = false; // Activer la protection après la première écriture
+  eepromWriteAllowed = false;
 }
 
 void saveSettingsToEEPROMIfChanged() {
-  // Sauvegarder seulement si les settings ont réellement changé
-  if (settings.pcycle != settingsBackup.pcycle ||
-      settings.kp != settingsBackup.kp ||
-      settings.ki != settingsBackup.ki ||
-      settings.kd != settingsBackup.kd ||
-      settings.maxDelta != settingsBackup.maxDelta) {
+  if (memcmp(&settings, &settingsBackup, sizeof(SettingsParams)) != 0) {
     saveSettingsToEEPROM();
-    settingsBackup = settings; // Mettre à jour le backup
+    settingsBackup = settings;
   }
 }
 
 void toggleProgState() {
   if (progState == PROG_OFF) {
     progState = PROG_ON;
-    programStartTime = millis();
-    phaseStartTime = millis();
+    unsigned long now = millis();
+    programStartTime = phaseStartTime = now;
+    #ifdef ENABLE_GRAPH
+    lastGraphUpdate = now;
+    #endif
     plateauReached = false;
     
-    // Lire la température actuelle pour démarrage intelligent
-    float currentTemp = readTemperature();
-    targetTemp = currentTemp;
+    float t = readTemperature();
+    targetTemp = t;
     
-    // Détection automatique de la phase de départ basée sur la température actuelle
-    if (!isnan(currentTemp) && currentTemp > 0) {
-      if (currentTemp < params.step1Temp) {
-        // Four froid ou en dessous de la cible Phase 1 : démarrer en Phase 1
+    // Démarrage intelligent par détection de phase
+    // phaseStartTemp = température réelle pour reprise à chaud, sinon température initiale
+    if (!isnan(t) && t > 0) {
+      if (t < params.step1Temp) {
         currentPhase = PHASE_1;
-      } else if (currentTemp < params.step2Temp) {
-        // Four déjà chaud (entre step1 et step2) : démarrer en Phase 2
+        phaseStartTemp = t;  // Température réelle au démarrage
+      } else if (t < params.step2Temp) {
         currentPhase = PHASE_2;
-        // Ajuster targetTemp pour continuer la montée depuis la température actuelle
-        targetTemp = currentTemp;
-      } else if (currentTemp < params.step3Temp) {
-        // Four très chaud (entre step2 et step3) : démarrer en Phase 3
+        phaseStartTemp = t;  // Reprise à chaud : température réelle
+      } else if (t < params.step3Temp) {
         currentPhase = PHASE_3;
-        targetTemp = currentTemp;
+        phaseStartTemp = t;  // Reprise à chaud : température réelle
       } else {
-        // Four à température finale ou plus : démarrer en cooldown
         currentPhase = PHASE_4_COOLDOWN;
-        targetTemp = currentTemp;
+        phaseStartTemp = t;  // Reprise à chaud : température réelle
       }
     } else {
-      // Erreur de lecture ou température invalide : démarrer en Phase 1 par sécurité
       currentPhase = PHASE_1;
-      targetTemp = 20.0; // Température par défaut
+      targetTemp = 20.0;
+      phaseStartTemp = 20.0;  // Valeur par défaut si lecture échoue
     }
     
-    // Réinitialiser les données du graphe
-    graphIndex = 0;
-    graphCount = 0;
-    samplingInterval = 5;
-    nextSamplingTime = 5;
-    lastGraphUpdate = millis();
+    #ifdef ENABLE_GRAPH
+    graphIndex = graphCount = 0;
+    samplingInterval = nextSamplingTime = 5;
+    #endif
     resetPID();
+    
+    #ifdef ENABLE_LOGGING
+    sendProgramStartLog(t);
+    #endif
   } else {
+    #ifdef ENABLE_LOGGING
+    sendProgramStopLog();
+    #endif
+    
     progState = PROG_OFF;
     currentPhase = PHASE_0;
     setRelay(false);
+    #ifdef ENABLE_GRAPH
     showGraph = false;
+    #endif
   }
 }
 
@@ -486,34 +511,41 @@ void updateProgram(unsigned long currentMillis, float currentTemp) {
   
   switch (currentPhase) {
     case PHASE_1:
-      targetTemp = calculateTargetTemp(currentTemp, params.step1Temp, params.step1Speed, phaseElapsed);
+      // Utilise phaseStartTemp (température initiale) au lieu de currentTemp
+      targetTemp = calculateTargetTemp(phaseStartTemp, params.step1Temp, params.step1Speed, phaseElapsed);
       if (checkPhaseComplete(currentTemp, params.step1Temp, plateauReached, plateauStartTime, params.step1Wait, currentMillis)) {
         currentPhase = PHASE_2;
         phaseStartTime = currentMillis;
+        phaseStartTemp = params.step1Temp;  // Départ = cible du palier précédent
         plateauReached = false;
       }
       break;
       
     case PHASE_2:
-      targetTemp = calculateTargetTemp(currentTemp, params.step2Temp, params.step2Speed, phaseElapsed);
+      // Utilise phaseStartTemp (step1Temp) au lieu de currentTemp
+      targetTemp = calculateTargetTemp(phaseStartTemp, params.step2Temp, params.step2Speed, phaseElapsed);
       if (checkPhaseComplete(currentTemp, params.step2Temp, plateauReached, plateauStartTime, params.step2Wait, currentMillis)) {
         currentPhase = PHASE_3;
         phaseStartTime = currentMillis;
+        phaseStartTemp = params.step2Temp;  // Départ = cible du palier précédent
         plateauReached = false;
       }
       break;
       
     case PHASE_3:
-      targetTemp = calculateTargetTemp(currentTemp, params.step3Temp, params.step3Speed, phaseElapsed);
+      // Utilise phaseStartTemp (step2Temp) au lieu de currentTemp
+      targetTemp = calculateTargetTemp(phaseStartTemp, params.step3Temp, params.step3Speed, phaseElapsed);
       if (checkPhaseComplete(currentTemp, params.step3Temp, plateauReached, plateauStartTime, params.step3Wait, currentMillis)) {
         currentPhase = PHASE_4_COOLDOWN;
         phaseStartTime = currentMillis;
+        phaseStartTemp = params.step3Temp;  // Départ = cible du palier précédent
         plateauReached = false;
       }
       break;
       
     case PHASE_4_COOLDOWN:
-      targetTemp = calculateCoolingTarget(currentTemp, params.step4Target, params.step4Speed, phaseElapsed);
+      // Utilise phaseStartTemp (step3Temp) au lieu de currentTemp
+      targetTemp = calculateCoolingTarget(phaseStartTemp, params.step4Target, params.step4Speed, phaseElapsed);
       if (currentTemp <= params.step4Target) {
         progState = PROG_OFF;
         currentPhase = PHASE_0;
@@ -551,62 +583,44 @@ bool checkPhaseComplete(float currentTemp, int phaseTemp, bool &reached, unsigne
   return false;
 }
 
-// Convertit une température float en uint8_t (0-255 = 0-1280°C, résolution ~5°C)
+#ifdef ENABLE_GRAPH
 uint8_t tempToUint8(float temp) {
   if (temp < 0) return 0;
   if (temp > 1280) return 255;
-  return (uint8_t)(temp * 255.0 / 1280.0);
+  return (uint8_t)(temp * 0.199);  // 255/1280 ≈ 0.199
 }
 
 void updateGraphData(unsigned long currentMillis, float temp) {
-  // Calculer le temps écoulé depuis le début du programme (en secondes)
-  uint16_t elapsedSeconds = (currentMillis - programStartTime) / 1000;
+  uint16_t elapsed = (currentMillis - programStartTime) / 1000;
+  if (elapsed < nextSamplingTime) return;
   
-  // Vérifier si il est temps d'enregistrer un nouveau point
-  if (elapsedSeconds < nextSamplingTime) {
-    return; // Pas encore temps d'enregistrer
-  }
-  
-  // Enregistrer le point
   graphTempRead[graphIndex] = tempToUint8(temp);
   graphTempTarget[graphIndex] = tempToUint8(targetTemp);
-  graphTimeStamps[graphIndex] = elapsedSeconds;
+  graphTimeStamps[graphIndex] = elapsed;
   
-  // Avancer l'index (buffer circulaire)
-  graphIndex++;
-  if (graphIndex >= GRAPH_SIZE) {
-    graphIndex = 0; // Revenir au début (écrasera les anciennes données)
-  }
+  if (++graphIndex >= GRAPH_SIZE) graphIndex = 0;
+  if (graphCount < GRAPH_SIZE) graphCount++;
   
-  // Incrémenter le compteur (max GRAPH_SIZE)
-  if (graphCount < GRAPH_SIZE) {
-    graphCount++;
-  }
+  nextSamplingTime = elapsed + samplingInterval;
   
-  // Calculer le prochain temps d'échantillonnage
-  nextSamplingTime = elapsedSeconds + samplingInterval;
-  
-  // Décimation adaptative : augmenter l'intervalle d'échantillonnage progressivement
-  // Stratégie : 5s → 10s → 15s → ... → 60s max (augmente tous les 20 points)
-  static uint8_t pointsSinceLastIncrease = 0;
-  pointsSinceLastIncrease++;
-  
-  if (pointsSinceLastIncrease >= 20 && samplingInterval < 60) {
-    // Augmenter l'intervalle de 5 secondes (max 60 secondes)
+  static uint8_t cnt = 0;
+  if (++cnt >= 20 && samplingInterval < 60) {
     samplingInterval += 5;
     if (samplingInterval > 60) samplingInterval = 60;
-    pointsSinceLastIncrease = 0;
+    cnt = 0;
   }
-  
-  lastGraphUpdate = currentMillis;
 }
+#endif
 
 void updateDisplay(unsigned long currentMillis) {
   u8g2.firstPage();
   do {
+    #ifdef ENABLE_GRAPH
     if (showGraph && progState == PROG_ON) {
       drawGraph();
-    } else if (tempFailActive && (currentMillis - tempFailStartTime > TEMP_FAIL_TIMEOUT)) {
+    } else
+    #endif
+    if (tempFailActive && (currentMillis - tempFailStartTime > TEMP_FAIL_TIMEOUT)) {
       // Afficher l'erreur critique de température
       u8g2.setFont(u8g2_font_6x10_tf);
       u8g2.drawStr(0, 10, "ERROR!");
@@ -626,45 +640,28 @@ void updateDisplay(unsigned long currentMillis) {
 }
 
 void saveToEEPROM() {
-  // Protection temporelle : minimum 5 secondes entre écritures pour préserver l'EEPROM
   unsigned long currentMillis = millis();
-  if (!eepromWriteAllowed) {
-    // Vérifier si l'intervalle minimum est respecté
-    // La soustraction gère automatiquement le rollover de millis()
-    if (currentMillis - lastEEPROMWrite < EEPROM_WRITE_MIN_INTERVAL) {
-      return; // Intervalle insuffisant, écriture ignorée pour protéger l'EEPROM
-    }
-  }
-  
-  // Écrire le magic number et les paramètres de cuisson
+  if (!eepromWriteAllowed && (currentMillis - lastEEPROMWrite < EEPROM_WRITE_MIN_INTERVAL)) return;
   EEPROM.put(EEPROM_ADDR_MAGIC, EEPROM_MAGIC);
   EEPROM.put(EEPROM_ADDR_PARAMS, params);
   lastEEPROMWrite = currentMillis;
-  eepromWriteAllowed = false; // Activer la protection après la première écriture
+  eepromWriteAllowed = false;
 }
 
 void saveToEEPROMIfChanged() {
-  // Sauvegarder seulement si les paramètres ont réellement changé
-  bool hasChanged = false;
-  // Comparer tous les champs de params
-  if (params.step1Speed != paramsBackup.step1Speed ||
-      params.step1Temp != paramsBackup.step1Temp ||
-      params.step1Wait != paramsBackup.step1Wait ||
-      params.step2Speed != paramsBackup.step2Speed ||
-      params.step2Temp != paramsBackup.step2Temp ||
-      params.step2Wait != paramsBackup.step2Wait ||
-      params.step3Speed != paramsBackup.step3Speed ||
-      params.step3Temp != paramsBackup.step3Temp ||
-      params.step3Wait != paramsBackup.step3Wait ||
-      params.step4Speed != paramsBackup.step4Speed ||
-      params.step4Target != paramsBackup.step4Target) {
-    hasChanged = true;
-  }
-  
-  if (hasChanged) {
+  if (memcmp(&params, &paramsBackup, sizeof(FiringParams)) != 0) {
     saveToEEPROM();
-    paramsBackup = params; // Mettre à jour le backup
+    paramsBackup = params;
   }
+}
+
+void saveAllToEEPROM() {
+  // Sauvegarder magic + params + settings en une fois
+  EEPROM.put(EEPROM_ADDR_MAGIC, EEPROM_MAGIC);
+  EEPROM.put(EEPROM_ADDR_PARAMS, params);
+  EEPROM.put(EEPROM_ADDR_PARAMS + sizeof(FiringParams), settings);
+  lastEEPROMWrite = millis();
+  eepromWriteAllowed = false;
 }
 
 void loadFromEEPROM() {
@@ -673,35 +670,85 @@ void loadFromEEPROM() {
   
   if (magic == EEPROM_MAGIC) {
     EEPROM.get(EEPROM_ADDR_PARAMS, params);
-    // Charger aussi les settings
     EEPROM.get(EEPROM_ADDR_PARAMS + sizeof(FiringParams), settings);
-    // Vérifier et corriger les valeurs settings si invalides
-    if (isnan(settings.kp) || settings.kp < 0.0 || settings.kp > 10.0) settings.kp = 2.0;
-    if (isnan(settings.ki) || settings.ki < 0.0 || settings.ki > 10.0) settings.ki = 0.5;
-    if (isnan(settings.kd) || settings.kd < 0.0 || settings.kd > 10.0) settings.kd = 0.0;
-    if (settings.pcycle < 100 || settings.pcycle > 10000) settings.pcycle = 1000;
-    if (settings.maxDelta < 1 || settings.maxDelta > 50) settings.maxDelta = 10;
-    // Appliquer les settings chargés (et validés)
+    
+    // Valider settings
+    settings.kp = constrain(settings.kp, 0.0, 10.0);
+    settings.ki = constrain(settings.ki, 0.0, 10.0);
+    settings.kd = constrain(settings.kd, 0.0, 10.0);
+    settings.pcycle = constrain(settings.pcycle, 100, 10000);
+    settings.maxDelta = constrain(settings.maxDelta, 1, 50);
+    
     CYCLE_LENGTH = settings.pcycle;
     KP = settings.kp;
     KI = settings.ki;
     KD = settings.kd;
-    // Initialiser les backups avec les valeurs chargées
-    paramsBackup = params;
-    settingsBackup = settings;
   } else {
-    // First use - save default values
-    // La protection est activée automatiquement après la première écriture
-    saveToEEPROM();
-    saveSettingsToEEPROM();
-    // Initialiser les backups avec les valeurs par défaut
-    paramsBackup = params;
-    settingsBackup = settings;
+    saveAllToEEPROM();
   }
+  paramsBackup = params;
+  settingsBackup = settings;
 }
 
 // Fonction pour obtenir la température mise en cache (lue toutes les 500ms dans loop())
 float getCurrentTemperature() {
   return cachedTemperature;
 }
+
+#ifdef ENABLE_LOGGING
+// Logging formaté pour meilleure lisibilité
+void sendStartupLog() {
+  Serial.println(F("=== LUCIA START ==="));
+  Serial.print(F("PID: Kp="));
+  Serial.print(KP);
+  Serial.print(F(" Ki="));
+  Serial.print(KI);
+  Serial.print(F(" Kd="));
+  Serial.println(KD);
+  Serial.println(F("Time(ms), Temp(C), Target(C), P, I, D, Power(%)"));
+  Serial.println(F("---"));
+}
+
+void sendDataLog(unsigned long t, float temp) {
+  Serial.print(t);
+  Serial.print(F(", "));
+  Serial.print(temp, 1);
+  Serial.print(F(", "));
+  Serial.print(targetTemp, 1);
+  Serial.print(F(", "));
+  Serial.print(getPIDProportional(), 1);
+  Serial.print(F(", "));
+  Serial.print(getPIDIntegral(), 1);
+  Serial.print(F(", "));
+  Serial.print(getPIDDerivative(), 1);
+  Serial.print(F(", "));
+  Serial.println(getPowerHold());
+}
+
+void sendProgramStartLog(float temp) {
+  Serial.println();
+  Serial.println(F(">>> PROGRAMME DEMARRE <<<"));
+  Serial.print(F("Temperature initiale: "));
+  Serial.print(temp, 1);
+  Serial.println(F("C"));
+  Serial.print(F("PID: Kp="));
+  Serial.print(KP);
+  Serial.print(F(" Ki="));
+  Serial.print(KI);
+  Serial.print(F(" Kd="));
+  Serial.println(KD);
+  Serial.print(F("Phase detectee: "));
+  Serial.println(currentPhase);
+  Serial.println(F("---"));
+}
+
+void sendProgramStopLog() {
+  Serial.println();
+  Serial.println(F("<<< PROGRAMME ARRETE >>>"));
+  Serial.print(F("Temperature finale: "));
+  Serial.print(cachedTemperature, 1);
+  Serial.println(F("C"));
+  Serial.println(F("---"));
+}
+#endif
 

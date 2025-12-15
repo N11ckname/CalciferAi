@@ -24,11 +24,13 @@ extern unsigned long programStartTime;
 extern unsigned long phaseStartTime;
 extern unsigned long plateauStartTime;
 extern bool plateauReached;
+#ifdef ENABLE_GRAPH
 extern uint8_t graphTempRead[];
 extern uint8_t graphTempTarget[];
 extern uint16_t graphTimeStamps[];
 extern uint8_t graphIndex;
 extern uint8_t graphCount;
+#endif
 extern int settingsScrollOffset;
 extern const int NUM_SETTINGS;
 

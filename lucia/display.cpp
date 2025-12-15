@@ -9,23 +9,21 @@
 // Buffer partagé pour économiser la RAM (utilisé par toutes les fonctions d'affichage)
 static char sharedBuffer[20];
 
-// Fonction helper : affiche un paramètre avec effet de sélection (disposition grille)
 void drawParamInline(int x, int y, const char* label, int value, const char* unit, int paramIndex) {
   snprintf(sharedBuffer, 20, "%s%d%s", label, value, unit);
+  int w = strlen(sharedBuffer) * 6;
   
-  if (selectedParam == paramIndex && editMode == NAV_MODE) {
-    // Cadre pour la navigation
-    int width = strlen(sharedBuffer) * 6;
-    u8g2.drawStr(x, y, sharedBuffer);
-    u8g2.drawFrame(x - 1, y - 9, width + 2, 11);
-  } else if (selectedParam == paramIndex && editMode == EDIT_MODE) {
-    // Inversion vidéo pour l'édition
-    int width = strlen(sharedBuffer) * 6;
-    u8g2.setDrawColor(1);
-    u8g2.drawBox(x - 1, y - 9, width + 2, 11);
-    u8g2.setDrawColor(0);
-    u8g2.drawStr(x, y, sharedBuffer);
-    u8g2.setDrawColor(1);
+  if (selectedParam == paramIndex) {
+    if (editMode == EDIT_MODE) {
+      u8g2.setDrawColor(1);
+      u8g2.drawBox(x-1, y-9, w+2, 11);
+      u8g2.setDrawColor(0);
+      u8g2.drawStr(x, y, sharedBuffer);
+      u8g2.setDrawColor(1);
+    } else {
+      u8g2.drawStr(x, y, sharedBuffer);
+      u8g2.drawFrame(x-1, y-9, w+2, 11);
+    }
   } else {
     u8g2.drawStr(x, y, sharedBuffer);
   }
@@ -92,151 +90,82 @@ void drawProgOffScreen() {
   }
 }
 
-// Fonction helper : calcule l'offset de défilement pour Settings
 void updateSettingsScrollOffset() {
-  const int SETTINGS_ITEMS_PER_PAGE = 4; // 4 lignes visibles (optimisé pour écran 64px)
-  
-  // Si l'élément sélectionné est au-dessus de la fenêtre visible
-  if (selectedSetting < settingsScrollOffset) {
-    settingsScrollOffset = selectedSetting;
-  }
-  
-  // Si l'élément sélectionné est en dessous de la fenêtre visible
-  if (selectedSetting >= settingsScrollOffset + SETTINGS_ITEMS_PER_PAGE) {
-    settingsScrollOffset = selectedSetting - SETTINGS_ITEMS_PER_PAGE + 1;
-  }
-  
-  // Contraindre l'offset dans les limites
-  if (settingsScrollOffset < 0) {
-    settingsScrollOffset = 0;
-  }
-  
-  int maxOffset = NUM_SETTINGS - SETTINGS_ITEMS_PER_PAGE;
-  if (maxOffset < 0) maxOffset = 0;
-  if (settingsScrollOffset > maxOffset) {
-    settingsScrollOffset = maxOffset;
-  }
+  const int PER_PAGE = 4;
+  if (selectedSetting < settingsScrollOffset) settingsScrollOffset = selectedSetting;
+  if (selectedSetting >= settingsScrollOffset + PER_PAGE) settingsScrollOffset = selectedSetting - PER_PAGE + 1;
+  if (settingsScrollOffset < 0) settingsScrollOffset = 0;
+  int max = NUM_SETTINGS - PER_PAGE;
+  if (max < 0) max = 0;
+  if (settingsScrollOffset > max) settingsScrollOffset = max;
 }
 
-// Fonction helper : dessine un indicateur de scroll pour Settings
 void drawSettingsScrollIndicator() {
-  const int SETTINGS_ITEMS_PER_PAGE = 4;
-  
-  if (NUM_SETTINGS <= SETTINGS_ITEMS_PER_PAGE) {
-    return; // Pas besoin si tout tient
-  }
-  
-  // Flèche haut
-  if (settingsScrollOffset > 0) {
-    u8g2.drawStr(120, 20, "^");
-  }
-  
-  // Flèche bas
-  if (settingsScrollOffset < NUM_SETTINGS - SETTINGS_ITEMS_PER_PAGE) {
-    u8g2.drawStr(120, 62, "v");
-  }
+  if (NUM_SETTINGS <= 4) return;
+  if (settingsScrollOffset > 0) u8g2.drawStr(120, 20, "^");
+  if (settingsScrollOffset < NUM_SETTINGS - 4) u8g2.drawStr(120, 62, "v");
 }
 
-// Fonction helper : dessine un élément de settings
 void drawSettingsItem(int itemIndex, int y) {
-  const char* label = "";
-  // Déclarer les variables float avant le switch pour éviter les problèmes de scope
-  float kpValue, kiValue, kdValue;
+  const char* label;
   
   switch (itemIndex) {
-    case 0: // Heat Cycle
-      label = "Heat Cycle";
-      snprintf(sharedBuffer, 20, "%dms", settings.pcycle);
+    case 0: 
+      label = "Heat Cycle"; 
+      snprintf(sharedBuffer, 20, "%dms", settings.pcycle); 
       break;
-      
-    case 1: // Kp
-      label = "Kp";
-      kpValue = KP;
-      if (isnan(kpValue) || kpValue < 0.0) kpValue = 2.0;
-      dtostrf(kpValue, 4, 1, sharedBuffer);
+    case 1: 
+      label = "Kp"; 
+      dtostrf(KP, 4, 1, sharedBuffer); 
       break;
-      
-    case 2: // Ki
-      label = "Ki";
-      kiValue = KI;
-      if (isnan(kiValue) || kiValue < 0.0) kiValue = 0.5;
-      dtostrf(kiValue, 4, 1, sharedBuffer);
+    case 2: 
+      label = "Ki"; 
+      dtostrf(KI, 4, 1, sharedBuffer); 
       break;
-      
-    case 3: // Kd
-      label = "Kd";
-      kdValue = KD;
-      if (isnan(kdValue) || kdValue < 0.0) kdValue = 0.0;
-      dtostrf(kdValue, 4, 1, sharedBuffer);
+    case 3: 
+      label = "Kd"; 
+      dtostrf(KD, 4, 1, sharedBuffer); 
       break;
-      
-    case 4: // Max delta
-      label = "Max delta";
-      snprintf(sharedBuffer, 20, "%dC", settings.maxDelta);
+    case 4: 
+      label = "Max delta"; 
+      snprintf(sharedBuffer, 20, "%dC", settings.maxDelta); 
       break;
-      
-    case 5: // Exit
-      label = "Exit";
-      sharedBuffer[0] = '\0'; // Pas de valeur pour Exit
+    case 5: 
+      label = "Exit"; 
+      strcpy(sharedBuffer, "<--");
       break;
   }
   
-  // Dessiner le label
   u8g2.drawStr(2, y, label);
-  
-  // Dessiner la valeur (si elle existe)
-  if (sharedBuffer[0] != '\0') {
-    int valueWidth = strlen(sharedBuffer) * 6;
-    int valueX = 126 - valueWidth; // Aligné à droite avant la barre de scroll
-    u8g2.drawStr(valueX, y, sharedBuffer);
-  }
+  u8g2.drawStr(126 - strlen(sharedBuffer) * 6, y, sharedBuffer);
 }
 
 void drawSettingsScreen() {
-  // Écran Settings avec défilement (liste scrollable)
   u8g2.setFont(u8g2_font_6x10_tf);
-  
-  // Titre en haut
   u8g2.drawStr(0, 10, "SETTINGS");
-  
-  // Calculer le défilement
   updateSettingsScrollOffset();
   
-  // Afficher la liste scrollable (4 éléments visibles pour tenir dans 64px)
-  const int SETTINGS_ITEMS_PER_PAGE = 4;
-  int lineHeight = 13;
-  int startY = 23; // Après le titre
-  
-  for (int i = 0; i < SETTINGS_ITEMS_PER_PAGE; i++) {
-    int itemIndex = settingsScrollOffset + i;
+  for (int i = 0; i < 4; i++) {
+    int idx = settingsScrollOffset + i;
+    if (idx >= NUM_SETTINGS) break;
     
-    // Vérifier si l'élément existe
-    if (itemIndex >= NUM_SETTINGS) break;
+    int y = 23 + (i * 13);
+    bool sel = (idx == selectedSetting);
     
-    int itemY = startY + (i * lineHeight);
-    bool isSelected = (itemIndex == selectedSetting);
-    
-    // Effet de sélection
-    if (isSelected && editMode == NAV_MODE) {
-      // Cadre pour la navigation (toute la largeur de l'écran)
-      u8g2.drawFrame(0, itemY - 10, 128, 12);
-    } else if (isSelected && editMode == EDIT_MODE) {
-      // Inversion vidéo pour l'édition (toute la largeur de l'écran)
-      u8g2.setDrawColor(1);
-      u8g2.drawBox(0, itemY - 10, 128, 12);
-      u8g2.setDrawColor(0);
+    if (sel) {
+      if (editMode == EDIT_MODE) {
+        u8g2.setDrawColor(1);
+        u8g2.drawBox(0, y-10, 128, 12);
+        u8g2.setDrawColor(0);
+      } else {
+        u8g2.drawFrame(0, y-10, 128, 12);
+      }
     }
     
-    // Dessiner l'élément
-    drawSettingsItem(itemIndex, itemY);
-    
-    // Restaurer la couleur normale
-    if (isSelected && editMode == EDIT_MODE) {
-      u8g2.setDrawColor(1);
-    }
+    drawSettingsItem(idx, y);
+    if (sel && editMode == EDIT_MODE) u8g2.setDrawColor(1);
   }
   
-  // Dessiner l'indicateur de scroll
   drawSettingsScrollIndicator();
 }
 
@@ -311,140 +240,65 @@ void drawProgOnScreen(unsigned long currentMillis) {
   
   // Temp Read (température de la sonde)
   u8g2.drawStr(0, 31, "Temp Read");
-  if (isnan(currentTemp)) {
-    snprintf(sharedBuffer, 20, "?C");
-  } else {
-    snprintf(sharedBuffer, 20, "%dC", (int)(currentTemp + 0.5));
-  }
-  int tempReadWidth = strlen(sharedBuffer) * 6;
-  u8g2.drawStr(128 - tempReadWidth, 31, sharedBuffer);
+  snprintf(sharedBuffer, 20, isnan(currentTemp) ? "?C" : "%dC", (int)(currentTemp + 0.5));
+  u8g2.drawStr(128 - strlen(sharedBuffer) * 6, 31, sharedBuffer);
   
   // Temp Target (température cible calculée)
   u8g2.drawStr(0, 42, "Temp Target");
   snprintf(sharedBuffer, 20, "%dC", (int)(targetTemp + 0.5));
-  int tempTargetWidth = strlen(sharedBuffer) * 6;
-  u8g2.drawStr(128 - tempTargetWidth, 42, sharedBuffer);
+  u8g2.drawStr(128 - strlen(sharedBuffer) * 6, 42, sharedBuffer);
   
   // Heat Power (PowerHold)
   u8g2.drawStr(0, 53, "Heat Power");
   snprintf(sharedBuffer, 20, "%d%%", powerHold);
-  int heatPowerWidth = strlen(sharedBuffer) * 6;
-  u8g2.drawStr(128 - heatPowerWidth, 53, sharedBuffer);
+  u8g2.drawStr(128 - strlen(sharedBuffer) * 6, 53, sharedBuffer);
   
-  // Phase : pourcentage de progression de la phase en cours
-  int phasePercent = 0;
+  // Phase : pourcentage
+  int pp = 0;
   if (!isnan(currentTemp)) {
-    if (currentPhase == PHASE_4_COOLDOWN) {
-      // Cool Down : progression basée sur la descente en température
-      float tempRange = phaseStartTemp - phaseTargetTemp;
-      if (tempRange > 0) {
-        float progress = (phaseStartTemp - currentTemp) / tempRange;
-        phasePercent = (int)(progress * 100);
-        if (phasePercent < 0) phasePercent = 0;
-        if (phasePercent > 100) phasePercent = 100;
-      }
-    } else {
-      // Phases 1, 2, 3 : progression basée sur la montée en température
-      if (!plateauReached) {
-        // Phase de montée : calculer le pourcentage par rapport à la cible
-        float tempRange = phaseTargetTemp - phaseStartTemp;
-        if (tempRange > 0) {
-          float progress = (currentTemp - phaseStartTemp) / tempRange;
-          phasePercent = (int)(progress * 100);
-          if (phasePercent < 0) phasePercent = 0;
-          if (phasePercent > 100) phasePercent = 100;
-        } else if (currentTemp >= phaseTargetTemp) {
-          phasePercent = 100;
-        }
-      } else {
-        // Plateau atteint : afficher 100%
-        phasePercent = 100;
-      }
+    float range = (currentPhase == PHASE_4_COOLDOWN) ? 
+                  (phaseStartTemp - phaseTargetTemp) : (phaseTargetTemp - phaseStartTemp);
+    if (range > 0) {
+      float prog = (currentPhase == PHASE_4_COOLDOWN) ? 
+                   (phaseStartTemp - currentTemp) : (currentTemp - phaseStartTemp);
+      pp = (int)((prog / range) * 100);
+      if (pp < 0) pp = 0;
+      if (pp > 100) pp = 100;
+    } else if (plateauReached || currentTemp >= phaseTargetTemp) {
+      pp = 100;
     }
   }
   u8g2.drawStr(0, 63, "Phase");
-  snprintf(sharedBuffer, 20, "%d%%", phasePercent > 100 ? 100 : phasePercent);
-  int phaseWidth = strlen(sharedBuffer) * 6;
-  u8g2.drawStr(128 - phaseWidth, 63, sharedBuffer);
+  snprintf(sharedBuffer, 20, "%d%%", pp);
+  u8g2.drawStr(128 - strlen(sharedBuffer) * 6, 63, sharedBuffer);
 }
 
-// Convertit un uint8_t en température float (pour affichage)
+#ifdef ENABLE_GRAPH
 float uint8ToTempDisplay(uint8_t value) {
   return (float)value * 1280.0 / 255.0;
 }
 
-// Calcule la température de consigne théorique à un temps donné (en secondes)
-float calculateTheoreticalTarget(uint16_t timeSeconds) {
-  // Recalculer les durées théoriques de chaque phase (avec paliers)
-  float startTemp = 20.0; // Température de départ (approximation)
+float calculateTheoreticalTarget(uint16_t t) {
+  const float T0 = 20.0;
+  // Calcul durées (secondes)
+  uint16_t r1 = params.step1Speed ? (params.step1Temp - T0) * 3600UL / params.step1Speed : 0;
+  uint16_t p1 = params.step1Wait * 60;
+  uint16_t e1 = r1 + p1;
   
-  // Phase 1 : montée + palier
-  float phase1Ramp = 0;
-  if (params.step1Temp > startTemp && params.step1Speed > 0) {
-    phase1Ramp = (params.step1Temp - startTemp) * 3600.0 / params.step1Speed;
-  }
-  float phase1Plateau = params.step1Wait * 60.0; // Conversion minutes → secondes
-  float phase1Total = phase1Ramp + phase1Plateau;
+  uint16_t r2 = params.step2Speed ? (params.step2Temp - params.step1Temp) * 3600UL / params.step2Speed : 0;
+  uint16_t p2 = params.step2Wait * 60;
+  uint16_t e2 = e1 + r2 + p2;
   
-  // Phase 2 : montée + palier
-  float phase2Ramp = 0;
-  if (params.step2Temp > params.step1Temp && params.step2Speed > 0) {
-    phase2Ramp = (params.step2Temp - params.step1Temp) * 3600.0 / params.step2Speed;
-  }
-  float phase2Plateau = params.step2Wait * 60.0;
-  float phase2Total = phase2Ramp + phase2Plateau;
+  uint16_t r3 = params.step3Speed ? (params.step3Temp - params.step2Temp) * 3600UL / params.step3Speed : 0;
+  uint16_t p3 = params.step3Wait * 60;
   
-  // Phase 3 : montée + palier
-  float phase3Ramp = 0;
-  if (params.step3Temp > params.step2Temp && params.step3Speed > 0) {
-    phase3Ramp = (params.step3Temp - params.step2Temp) * 3600.0 / params.step3Speed;
-  }
-  float phase3Plateau = params.step3Wait * 60.0;
-  float phase3Total = phase3Ramp + phase3Plateau;
-  
-  // Points de transition temporels
-  float endPhase1Ramp = phase1Ramp;
-  float endPhase1 = phase1Total;
-  float endPhase2Ramp = endPhase1 + phase2Ramp;
-  float endPhase2 = endPhase1 + phase2Total;
-  float endPhase3Ramp = endPhase2 + phase3Ramp;
-  float endPhase3 = endPhase2 + phase3Total;
-  
-  // Déterminer la température à ce temps
-  if (timeSeconds <= endPhase1Ramp) {
-    // Phase 1 - Rampe de montée
-    if (phase1Ramp > 0) {
-      float progress = timeSeconds / phase1Ramp;
-      return startTemp + (params.step1Temp - startTemp) * progress;
-    }
-    return params.step1Temp;
-  } else if (timeSeconds <= endPhase1) {
-    // Phase 1 - Palier
-    return params.step1Temp;
-  } else if (timeSeconds <= endPhase2Ramp) {
-    // Phase 2 - Rampe de montée
-    if (phase2Ramp > 0) {
-      float progress = (timeSeconds - endPhase1) / phase2Ramp;
-      return params.step1Temp + (params.step2Temp - params.step1Temp) * progress;
-    }
-    return params.step2Temp;
-  } else if (timeSeconds <= endPhase2) {
-    // Phase 2 - Palier
-    return params.step2Temp;
-  } else if (timeSeconds <= endPhase3Ramp) {
-    // Phase 3 - Rampe de montée
-    if (phase3Ramp > 0) {
-      float progress = (timeSeconds - endPhase2) / phase3Ramp;
-      return params.step2Temp + (params.step3Temp - params.step2Temp) * progress;
-    }
-    return params.step3Temp;
-  } else if (timeSeconds <= endPhase3) {
-    // Phase 3 - Palier
-    return params.step3Temp;
-  } else {
-    // Au-delà de la phase 3
-    return params.step3Temp;
-  }
+  // Déterminer température
+  if (t <= r1) return r1 ? T0 + (params.step1Temp - T0) * t / r1 : params.step1Temp;
+  if (t <= e1) return params.step1Temp;
+  if (t <= e1 + r2) return r2 ? params.step1Temp + (params.step2Temp - params.step1Temp) * (t - e1) / r2 : params.step2Temp;
+  if (t <= e2) return params.step2Temp;
+  if (t <= e2 + r3) return r3 ? params.step2Temp + (params.step3Temp - params.step2Temp) * (t - e2) / r3 : params.step3Temp;
+  return params.step3Temp;
 }
 
 void drawGraph() {
@@ -498,36 +352,15 @@ void drawGraph() {
   snprintf(pidBuf, 12, "D:%s", floatBuf);
   u8g2.drawStr(PID_X, 30, pidBuf);
   
-  // Calculer la durée totale théorique du programme (AVEC les temps d'attente/paliers)
-  float startTemp = 20.0; // Température de départ approximative
-  
-  // Phase 1 : montée + palier
-  float phase1Ramp = 0;
-  if (params.step1Temp > startTemp && params.step1Speed > 0) {
-    phase1Ramp = (params.step1Temp - startTemp) * 3600.0 / params.step1Speed;
-  }
-  float phase1Plateau = params.step1Wait * 60.0; // Minutes → secondes
-  float phase1Total = phase1Ramp + phase1Plateau;
-  
-  // Phase 2 : montée + palier
-  float phase2Ramp = 0;
-  if (params.step2Temp > params.step1Temp && params.step2Speed > 0) {
-    phase2Ramp = (params.step2Temp - params.step1Temp) * 3600.0 / params.step2Speed;
-  }
-  float phase2Plateau = params.step2Wait * 60.0;
-  float phase2Total = phase2Ramp + phase2Plateau;
-  
-  // Phase 3 : montée + palier
-  float phase3Ramp = 0;
-  if (params.step3Temp > params.step2Temp && params.step3Speed > 0) {
-    phase3Ramp = (params.step3Temp - params.step2Temp) * 3600.0 / params.step3Speed;
-  }
-  float phase3Plateau = params.step3Wait * 60.0;
-  float phase3Total = phase3Ramp + phase3Plateau;
-  
-  // Durée totale incluant tous les paliers
-  float totalDuration = phase1Total + phase2Total + phase3Total;
-  if (totalDuration < 60) totalDuration = 60; // Minimum 1 minute pour éviter division par zéro
+  // Calcul durée totale optimisé
+  uint32_t d = 0;
+  if (params.step1Speed) d += ((uint32_t)(params.step1Temp - 20) * 3600UL) / params.step1Speed;
+  d += (uint32_t)params.step1Wait * 60;
+  if (params.step2Speed) d += ((uint32_t)(params.step2Temp - params.step1Temp) * 3600UL) / params.step2Speed;
+  d += (uint32_t)params.step2Wait * 60;
+  if (params.step3Speed) d += ((uint32_t)(params.step3Temp - params.step2Temp) * 3600UL) / params.step3Speed;
+  d += (uint32_t)params.step3Wait * 60;
+  uint16_t totalDuration = (d < 60) ? 60 : d;
   
   // Limites du graphe : toujours de 0 à la durée totale du programme
   uint16_t minTime = 0;
@@ -538,31 +371,17 @@ void drawGraph() {
   float tempMax = params.step3Temp;
   if (tempMax < 100) tempMax = 100; // Minimum 100°C pour l'échelle
   
-  // Dessiner la courbe de consigne théorique complète (ligne continue sur toute la durée)
+  // Courbe théorique (échantillonnage tous les 2 pixels pour réduire les calculs)
   int lastX = -1, lastY = -1;
-  for (int px = 0; px < GRAPH_WIDTH; px++) {
-    // Calculer le temps correspondant à ce pixel (de 0 à durée totale)
-    float timeAtPixel = minTime + (float)(maxTime - minTime) * px / GRAPH_WIDTH;
-    
-    // Calculer la température théorique à ce temps
-    float theoreticalTemp = calculateTheoreticalTarget((uint16_t)timeAtPixel);
-    
-    // Mapper la température sur l'axe Y
-    int y = GRAPH_Y + GRAPH_HEIGHT - 1 - (int)((theoreticalTemp - tempMin) * (GRAPH_HEIGHT - 1) / (tempMax - tempMin));
-    
-    // Limiter aux bornes du graphe
+  for (int px = 0; px < GRAPH_WIDTH; px += 2) {
+    uint16_t t = minTime + (uint32_t)(maxTime - minTime) * px / GRAPH_WIDTH;
+    float temp = calculateTheoreticalTarget(t);
+    int y = GRAPH_Y + GRAPH_HEIGHT - 1 - (int)((temp - tempMin) * (GRAPH_HEIGHT - 1) / (tempMax - tempMin));
     if (y < GRAPH_Y) y = GRAPH_Y;
     if (y > GRAPH_Y + GRAPH_HEIGHT - 1) y = GRAPH_Y + GRAPH_HEIGHT - 1;
-    
     int x = GRAPH_X + px;
-    
-    // Dessiner la ligne
-    if (lastX >= 0) {
-      u8g2.drawLine(lastX, lastY, x, y);
-    }
-    
-    lastX = x;
-    lastY = y;
+    if (lastX >= 0) u8g2.drawLine(lastX, lastY, x, y);
+    lastX = x; lastY = y;
   }
   
   // Dessiner les points de mesure réels (petits carrés) seulement s'il y en a
@@ -606,3 +425,4 @@ void drawGraph() {
   int tempMaxStrWidth = strlen(sharedBuffer) * 6;
   u8g2.drawStr(128 - tempMaxStrWidth, GRAPH_Y + 8, sharedBuffer);
 }
+#endif

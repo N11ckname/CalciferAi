@@ -22,6 +22,7 @@ CalciferAi est un système de contrôle intelligent de four céramique basé sur
 - Faire simple et concis dans un seul fichier si documentation nécessaire
 
 ### Composants principaux :
+- **Prompt_CalciferAi.md** : Fichier de description principal du projet avec toutes les données utiles
 - **lucia/** : Code Arduino (contrôleur réel) pour Arduino Uno avec affichage OLED SH1106
 - **simulator/** : Simulateur Python complet avec interface graphique Pygame
 - **TEST_MODE/** : Outils de diagnostic et de test matériel
