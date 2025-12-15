@@ -34,6 +34,7 @@ void resetPID();
 float getPIDProportional();  // Retourne la valeur du terme P
 float getPIDIntegral();      // Retourne la valeur du terme I
 float getPIDDerivative();    // Retourne la valeur du terme D
+float getPIDError();         // Retourne l'erreur actuelle (Target - Sonde) en degrés
 
 #endif
 

@@ -485,19 +485,19 @@ void editParameter(int delta) {
     case 0: return; // Settings - ne peut pas être édité ici, géré par le bouton
     // Phase 1
     case 1: value = &params.step1Speed; minVal = 1; maxVal = 1000; step = 10; break;   // P1 gauche
-    case 2: value = &params.step1Temp; minVal = 0; maxVal = 1500; step = 10; break;    // P1 centre
-    case 3: value = &params.step1Wait; minVal = 0; maxVal = 999; step = 5; break;      // P1 droite
+    case 2: value = &params.step1Temp; minVal = 0; maxVal = 1500; step = 5; break;     // P1 centre (5°C)
+    case 3: value = &params.step1Wait; minVal = 0; maxVal = 999; step = 1; break;      // P1 droite (1 min)
     // Phase 2
     case 4: value = &params.step2Speed; minVal = 1; maxVal = 1000; step = 10; break;   // P2 gauche
-    case 5: value = &params.step2Temp; minVal = 0; maxVal = 1500; step = 10; break;    // P2 centre
-    case 6: value = &params.step2Wait; minVal = 0; maxVal = 999; step = 5; break;      // P2 droite
+    case 5: value = &params.step2Temp; minVal = 0; maxVal = 1500; step = 5; break;     // P2 centre (5°C)
+    case 6: value = &params.step2Wait; minVal = 0; maxVal = 999; step = 1; break;      // P2 droite (1 min)
     // Phase 3
     case 7: value = &params.step3Speed; minVal = 1; maxVal = 1000; step = 10; break;   // P3 gauche
-    case 8: value = &params.step3Temp; minVal = 0; maxVal = 1500; step = 10; break;    // P3 centre
-    case 9: value = &params.step3Wait; minVal = 0; maxVal = 999; step = 5; break;      // P3 droite
+    case 8: value = &params.step3Temp; minVal = 0; maxVal = 1500; step = 5; break;     // P3 centre (5°C)
+    case 9: value = &params.step3Wait; minVal = 0; maxVal = 999; step = 1; break;      // P3 droite (1 min)
     // Cooldown
     case 10: value = &params.step4Speed; minVal = 1; maxVal = 1000; step = 10; break;  // Cool gauche
-    case 11: value = &params.step4Target; minVal = 0; maxVal = 1000; step = 10; break; // Cool droite
+    case 11: value = &params.step4Target; minVal = 0; maxVal = 1000; step = 5; break;  // Cool droite (5°C)
     default: return;
   }
   
@@ -558,16 +558,18 @@ void updateProgram(unsigned long currentMillis, float currentTemp) {
 float calculateTargetTemp(float startTemp, int targetTemp, int speed, unsigned long elapsed) {
   // Calcul de la température cible basé sur la vitesse de montée (°C/h)
   // Conversion : elapsed (ms) -> heures -> température
-  unsigned long tempIncrease = (unsigned long)speed * elapsed / 3600000UL;
-  float calculatedTarget = startTemp + (float)tempIncrease;
+  // Utilisation de float pour avoir une progression continue (pas de sauts de 1°C)
+  float tempIncrease = (float)speed * (float)elapsed / 3600000.0;
+  float calculatedTarget = startTemp + tempIncrease;
   return (calculatedTarget > targetTemp) ? (float)targetTemp : calculatedTarget;
 }
 
 float calculateCoolingTarget(float startTemp, int targetTemp, int speed, unsigned long elapsed) {
   // Calcul de la température cible basé sur la vitesse de descente (°C/h)
   // Conversion : elapsed (ms) -> heures -> température
-  unsigned long tempDecrease = (unsigned long)speed * elapsed / 3600000UL;
-  float calculatedTarget = startTemp - (float)tempDecrease;
+  // Utilisation de float pour avoir une progression continue (pas de sauts de 1°C)
+  float tempDecrease = (float)speed * (float)elapsed / 3600000.0;
+  float calculatedTarget = startTemp - tempDecrease;
   return (calculatedTarget < targetTemp) ? (float)targetTemp : calculatedTarget;
 }
 
@@ -705,7 +707,7 @@ void sendStartupLog() {
   Serial.print(KI);
   Serial.print(F(" Kd="));
   Serial.println(KD);
-  Serial.println(F("Time(ms), Temp(C), Target(C), P, I, D, Power(%)"));
+  Serial.println(F("Time(ms), Temp(C), Target(C), P, I, D, Power(%), Error(C)"));
   Serial.println(F("---"));
 }
 
@@ -722,7 +724,9 @@ void sendDataLog(unsigned long t, float temp) {
   Serial.print(F(", "));
   Serial.print(getPIDDerivative(), 1);
   Serial.print(F(", "));
-  Serial.println(getPowerHold());
+  Serial.print(getPowerHold());
+  Serial.print(F(", "));
+  Serial.println(getPIDError(), 1);
 }
 
 void sendProgramStartLog(float temp) {
@@ -731,14 +735,54 @@ void sendProgramStartLog(float temp) {
   Serial.print(F("Temperature initiale: "));
   Serial.print(temp, 1);
   Serial.println(F("C"));
-  Serial.print(F("PID: Kp="));
-  Serial.print(KP);
-  Serial.print(F(" Ki="));
-  Serial.print(KI);
-  Serial.print(F(" Kd="));
-  Serial.println(KD);
   Serial.print(F("Phase detectee: "));
   Serial.println(currentPhase);
+  Serial.println();
+  
+  // Paramètres PID
+  Serial.print(F("PID: Kp="));
+  Serial.print(KP, 2);
+  Serial.print(F(" Ki="));
+  Serial.print(KI, 2);
+  Serial.print(F(" Kd="));
+  Serial.print(KD, 2);
+  Serial.print(F(" maxDelta="));
+  Serial.print(settings.maxDelta);
+  Serial.println(F("C"));
+  Serial.println();
+  
+  // Paramètres des phases
+  Serial.println(F("=== PROGRAMME DE CUISSON ==="));
+  Serial.print(F("Phase 1: "));
+  Serial.print(params.step1Speed);
+  Serial.print(F("C/h -> "));
+  Serial.print(params.step1Temp);
+  Serial.print(F("C, palier "));
+  Serial.print(params.step1Wait);
+  Serial.println(F(" min"));
+  
+  Serial.print(F("Phase 2: "));
+  Serial.print(params.step2Speed);
+  Serial.print(F("C/h -> "));
+  Serial.print(params.step2Temp);
+  Serial.print(F("C, palier "));
+  Serial.print(params.step2Wait);
+  Serial.println(F(" min"));
+  
+  Serial.print(F("Phase 3: "));
+  Serial.print(params.step3Speed);
+  Serial.print(F("C/h -> "));
+  Serial.print(params.step3Temp);
+  Serial.print(F("C, palier "));
+  Serial.print(params.step3Wait);
+  Serial.println(F(" min"));
+  
+  Serial.print(F("Refroidissement: "));
+  Serial.print(params.step4Speed);
+  Serial.print(F("C/h -> "));
+  Serial.print(params.step4Target);
+  Serial.println(F("C"));
+  Serial.println(F("============================"));
   Serial.println(F("---"));
 }
 

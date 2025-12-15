@@ -15,7 +15,7 @@ import platform
 from datetime import datetime
 import sys
 import threading
-from collections import deque
+# collections.deque supprimé - on garde tout l'historique maintenant
 
 # Import matplotlib pour le graphique
 try:
@@ -32,17 +32,17 @@ except ImportError:
 BAUD_RATE = 9600  # 9600 bauds pour robustesse maximale (environnement industriel)
 LOGS_DIR = "logs"
 TIMEOUT = 2  # Timeout de lecture série (secondes)
-MAX_POINTS = 500  # Nombre max de points sur le graphique
 
 # Données pour le graphique (partagées entre threads)
+# Listes sans limite pour conserver tout l'historique de la cuisson
 graph_data = {
-    'time': deque(maxlen=MAX_POINTS),
-    'temp': deque(maxlen=MAX_POINTS),
-    'target': deque(maxlen=MAX_POINTS),
-    'p': deque(maxlen=MAX_POINTS),
-    'i': deque(maxlen=MAX_POINTS),
-    'd': deque(maxlen=MAX_POINTS),
-    'power': deque(maxlen=MAX_POINTS),
+    'time': [],
+    'temp': [],
+    'target': [],
+    'p': [],
+    'i': [],
+    'd': [],
+    'power': [],
     'lock': threading.Lock()
 }
 

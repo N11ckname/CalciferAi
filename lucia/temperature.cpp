@@ -217,3 +217,8 @@ float getPIDDerivative() {
   return pidDerivative;
 }
 
+float getPIDError() {
+  // Retourner l'erreur en degrés (lastError est scalé x100)
+  return lastError / 100.0;
+}
+
