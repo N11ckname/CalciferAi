@@ -11,9 +11,9 @@
 #define PIN_LED A1
 
 // PID Parameters (variables modifiables)
-float KP = 2.0;
-float KI = 0.5;
-float KD = 0.0;
+float KP = 2.5;
+float KI = 0.03;
+// KD supprimé : non utilisé pour four céramique (inertie thermique élevée)
 
 // PWM Parameters (variables modifiables)
 unsigned int CYCLE_LENGTH = 1000;  // Cycle PWM de 1 seconde par défaut
@@ -32,7 +32,7 @@ unsigned long lastPIDUpdate = 0;
 // PID Components (valeurs résultantes du dernier calcul)
 float pidProportional = 0.0;
 float pidIntegral = 0.0;
-float pidDerivative = 0.0;
+// pidDerivative supprimé : terme D non utilisé
 
 void initTemperatureControl() {
   pinMode(PIN_RELAY, OUTPUT);
@@ -155,8 +155,12 @@ void updateTemperatureControl(float currentTemp, float targetTemp, bool enabled,
   // Calcul du terme proportionnel (P)
   pidProportional = KP * (error / 100.0);
   
-  // Calcul du terme intégral (I) avec accumulation
-  integralError += (int)(error * dt);
+  // Calcul du terme intégral (I) avec accumulation conditionnelle
+  // Anti-windup conditionnel : ne pas accumuler si la puissance est déjà saturée
+  // Cela évite l'accumulation inutile quand le four est déjà à 100% de puissance
+  if (lastPowerHold < 10000) {  // Si puissance < 100%
+    integralError += (int)(error * dt);
+  }
   
   // Anti-windup : limiter l'accumulation du terme intégral pour éviter la saturation
   long maxIntegral = (long)(100000.0 / KI);  // Ajusté pour le nouveau scaling (x10)
@@ -165,15 +169,11 @@ void updateTemperatureControl(float currentTemp, float targetTemp, bool enabled,
   
   pidIntegral = KI * (integralError / 1000.0);  // Divisé par 10 pour réponse plus lente
   
-  // Calcul du terme dérivé (D)
-  // Mesure la vitesse de changement de l'erreur pour anticiper les variations
-  pidDerivative = 0.0;
-  if (dt > 0.0 && dt < 2.0) {  // Calculer seulement si dt est valide
-    pidDerivative = KD * ((error - lastError) / 100.0) / dt;
-  }
+  // Terme D (dérivé) supprimé : non nécessaire pour four céramique (inertie élevée)
+  // Économie : ~8 bytes RAM + ~100 bytes Flash
   
-  // Calculer la nouvelle puissance de sortie PID complet (0-10000, scalé x100)
-  int newPowerHoldScaled = (int)((pidProportional + pidIntegral + pidDerivative) * 100);
+  // Calculer la nouvelle puissance de sortie PID (PI seulement, pas D)
+  int newPowerHoldScaled = (int)((pidProportional + pidIntegral) * 100);
   
   // Limiter le taux de changement de puissance (sécurité four)
   // Évite les variations brutales qui pourraient endommager les résistances
@@ -211,10 +211,6 @@ float getPIDProportional() {
 
 float getPIDIntegral() {
   return pidIntegral;
-}
-
-float getPIDDerivative() {
-  return pidDerivative;
 }
 
 float getPIDError() {

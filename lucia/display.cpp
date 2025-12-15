@@ -122,15 +122,11 @@ void drawSettingsItem(int itemIndex, int y) {
       label = "Ki"; 
       dtostrf(KI, 5, 2, sharedBuffer); 
       break;
-    case 3: 
-      label = "Kd"; 
-      dtostrf(KD, 4, 1, sharedBuffer); 
-      break;
-    case 4: 
+    case 3:  // Kd supprimé, Max delta devient case 3
       label = "Max delta"; 
       snprintf(sharedBuffer, 20, "%dC", settings.maxDelta); 
       break;
-    case 5: 
+    case 4:  // Exit devient case 4
       label = "Exit"; 
       strcpy(sharedBuffer, "<--");
       break;
@@ -321,7 +317,7 @@ void drawGraph() {
   // Cache des valeurs PID résultantes avec mise à jour toutes les secondes
   static float cachedP = 0.0;
   static float cachedI = 0.0;
-  static float cachedD = 0.0;
+  // cachedD supprimé : terme D non utilisé
   static unsigned long lastPidUpdate = 0;
   unsigned long currentMillis = millis();
   
@@ -329,7 +325,7 @@ void drawGraph() {
   if (currentMillis - lastPidUpdate >= 1000) {
     cachedP = getPIDProportional();
     cachedI = getPIDIntegral();
-    cachedD = getPIDDerivative();
+    // getPIDDerivative() supprimé
     lastPidUpdate = currentMillis;
   }
   
@@ -347,10 +343,7 @@ void drawGraph() {
   snprintf(pidBuf, 12, "I:%s", floatBuf);
   u8g2.drawStr(PID_X, 20, pidBuf);
   
-  // Terme D sur la troisième ligne (Y = 30)
-  dtostrf(cachedD, 4, 1, floatBuf);
-  snprintf(pidBuf, 12, "D:%s", floatBuf);
-  u8g2.drawStr(PID_X, 30, pidBuf);
+  // Terme D supprimé : non utilisé pour four céramique
   
   // Calcul durée totale optimisé
   uint32_t d = 0;

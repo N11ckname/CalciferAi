@@ -13,7 +13,7 @@ extern Adafruit_MAX31856 max31856;
 // PID Parameters (variables externes modifiables via l'interface Settings)
 extern float KP;  // Gain proportionnel : réaction immédiate à l'erreur
 extern float KI;  // Gain intégral : correction de l'erreur résiduelle
-extern float KD;  // Gain dérivé : anticipation des variations (amortissement)
+// KD supprimé : non utilisé pour four céramique (inertie thermique élevée)
 #define MAX_POWER_CHANGE 10.0  // Limitation sécurité : max 10% de changement par cycle
 
 // PWM Parameters (contrôle de la fréquence de chauffage)
@@ -33,7 +33,7 @@ void resetPID();
 // PID Components Getters (valeurs résultantes du calcul PID)
 float getPIDProportional();  // Retourne la valeur du terme P
 float getPIDIntegral();      // Retourne la valeur du terme I
-float getPIDDerivative();    // Retourne la valeur du terme D
+// getPIDDerivative() supprimé : terme D non utilisé
 float getPIDError();         // Retourne l'erreur actuelle (Target - Sonde) en degrés
 
 #endif

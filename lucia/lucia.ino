@@ -37,10 +37,10 @@ FiringParams params = {100, 50, 5, 570, 250, 15, 1100, 200, 20, 150, 200};
 FiringParams paramsBackup; // Sauvegarde pour détecter les changements
 
 // ===== SETTINGS PARAMETERS =====
-SettingsParams settings = {1000, 2.0, 0.5, 0.0, 10}; // pcycle (ms), kp, ki, kd, maxDelta (°C)
+SettingsParams settings = {1000, 2.5, 0.03, 0.0, 10}; // pcycle (ms), kp, ki, kd (non utilisé), maxDelta (°C)
 SettingsParams settingsBackup; // Sauvegarde pour détecter les changements
 int selectedSetting = 0;
-const int NUM_SETTINGS = 6; // Heat Cycle, Kp, Ki, Kd, Max delta, Exit
+const int NUM_SETTINGS = 5; // Heat Cycle, Kp, Ki, Max delta, Exit (Kd supprimé)
 int settingsScrollOffset = 0; // Scroll pour l'écran settings
 
 // ===== UI PARAMETERS =====
@@ -160,7 +160,7 @@ void setup() {
   // S'assurer que settings est synchronisé avec les valeurs PID réelles
   settings.kp = KP;
   settings.ki = KI;
-  settings.kd = KD;
+  // settings.kd reste à 0.0 (non utilisé, mais gardé pour compatibilité EEPROM)
   // Mettre à jour le backup après synchronisation
   settingsBackup = settings;
   
@@ -282,7 +282,7 @@ void handleButtons(unsigned long currentMillis) {
         toggleEditMode();
       }
     } else if (progState == SETTINGS) {
-      if (selectedSetting == 5) {
+      if (selectedSetting == 4) {  // Exit est maintenant à l'index 4 (Kd supprimé)
         progState = PROG_OFF;
         selectedParam = 2; // Retour sur step1Temp par défaut
         editMode = NAV_MODE;
@@ -382,18 +382,12 @@ void editSetting(int delta) {
       settings.kp = KP; // Synchroniser settings avec la valeur réelle
       break;
     case 2: // Ki - modifier directement la valeur réelle du PID
-      KI += delta * 0.01; // Incrément de 0.01
+      KI += delta * 0.005; // Incrément de 0.005 (plus fin pour Ki faible)
       if (KI < 0.0) KI = 0.0;
-      if (KI > 10.0) KI = 10.0;
+      if (KI > 1.0) KI = 1.0; // Limiter à 1.0 (valeurs supérieures rarement utiles)
       settings.ki = KI; // Synchroniser settings avec la valeur réelle
       break;
-    case 3: // Kd - modifier directement la valeur réelle du PID
-      KD += delta * 0.1; // Incrément de 0.1
-      if (KD < 0.0) KD = 0.0;
-      if (KD > 10.0) KD = 10.0;
-      settings.kd = KD; // Synchroniser settings avec la valeur réelle
-      break;
-    case 4: // Max delta
+    case 3: // Max delta (Kd supprimé - case 3 devient Max delta)
       settings.maxDelta += delta * 1; // Incrément de 1°C
       if (settings.maxDelta < 1) settings.maxDelta = 1;
       if (settings.maxDelta > 50) settings.maxDelta = 50;
@@ -677,14 +671,14 @@ void loadFromEEPROM() {
     // Valider settings
     settings.kp = constrain(settings.kp, 0.0, 10.0);
     settings.ki = constrain(settings.ki, 0.0, 10.0);
-    settings.kd = constrain(settings.kd, 0.0, 10.0);
+    settings.kd = 0.0;  // Forcer à 0 (non utilisé)
     settings.pcycle = constrain(settings.pcycle, 100, 10000);
     settings.maxDelta = constrain(settings.maxDelta, 1, 50);
     
     CYCLE_LENGTH = settings.pcycle;
     KP = settings.kp;
     KI = settings.ki;
-    KD = settings.kd;
+    // KD supprimé (non utilisé)
   } else {
     saveAllToEEPROM();
   }
@@ -704,10 +698,8 @@ void sendStartupLog() {
   Serial.print(F("PID: Kp="));
   Serial.print(KP);
   Serial.print(F(" Ki="));
-  Serial.print(KI);
-  Serial.print(F(" Kd="));
-  Serial.println(KD);
-  Serial.println(F("Time(ms), Temp(C), Target(C), P, I, D, Power(%), Error(C)"));
+  Serial.println(KI);
+  Serial.println(F("Time(ms), Temp(C), Target(C), P, I, Power(%), Error(C)"));
   Serial.println(F("---"));
 }
 
@@ -721,8 +713,6 @@ void sendDataLog(unsigned long t, float temp) {
   Serial.print(getPIDProportional(), 1);
   Serial.print(F(", "));
   Serial.print(getPIDIntegral(), 1);
-  Serial.print(F(", "));
-  Serial.print(getPIDDerivative(), 1);
   Serial.print(F(", "));
   Serial.print(getPowerHold());
   Serial.print(F(", "));
@@ -744,8 +734,6 @@ void sendProgramStartLog(float temp) {
   Serial.print(KP, 2);
   Serial.print(F(" Ki="));
   Serial.print(KI, 2);
-  Serial.print(F(" Kd="));
-  Serial.print(KD, 2);
   Serial.print(F(" maxDelta="));
   Serial.print(settings.maxDelta);
   Serial.println(F("C"));
