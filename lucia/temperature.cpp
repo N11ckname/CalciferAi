@@ -24,7 +24,7 @@ bool powerON = false;
 unsigned long pwmCycleStart = 0;
 
 // PID variables (optimized for RAM)
-int integralError = 0;      // Scaled by 100
+long integralError = 0;     // Scaled by 100 (long pour éviter overflow)
 int lastError = 0;          // Scaled by 100
 int lastPowerHold = 0;      // 0-10000 (scaled by 100)
 unsigned long lastPIDUpdate = 0;
@@ -159,11 +159,11 @@ void updateTemperatureControl(float currentTemp, float targetTemp, bool enabled,
   integralError += (int)(error * dt);
   
   // Anti-windup : limiter l'accumulation du terme intégral pour éviter la saturation
-  int maxIntegral = (int)(10000.0 / KI);
+  long maxIntegral = (long)(100000.0 / KI);  // Ajusté pour le nouveau scaling (x10)
   if (integralError > maxIntegral) integralError = maxIntegral;
   if (integralError < -maxIntegral) integralError = -maxIntegral;
   
-  pidIntegral = KI * (integralError / 100.0);
+  pidIntegral = KI * (integralError / 1000.0);  // Divisé par 10 pour réponse plus lente
   
   // Calcul du terme dérivé (D)
   // Mesure la vitesse de changement de l'erreur pour anticiper les variations
