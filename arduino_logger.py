@@ -249,6 +249,7 @@ def setup_graph():
     ax2.set_xlabel('Temps (minutes)')
     ax2.set_title('Composantes PID & Puissance')
     ax2.grid(True, alpha=0.3)
+    ax2.set_ylim(0, 105)  # Axe Y fixé à 100 (+ marge)
     line_p, = ax2.plot([], [], 'c-', label='P', linewidth=1.5)
     line_i, = ax2.plot([], [], 'm-', label='I', linewidth=1.5)
     line_d, = ax2.plot([], [], 'y-', label='D', linewidth=1.5)
@@ -315,12 +316,7 @@ def update_graph(frame, lines, axes):
             y_margin = max(10, (y_max - y_min) * 0.1)
             axes['ax1'].set_ylim(0, y_max + y_margin)
         
-        # Axe Y pour PID (jamais négatif)
-        if p_data and i_data and d_data:
-            all_pid = p_data + i_data + d_data
-            y_max = max(all_pid)
-            y_margin = max(1, y_max * 0.1)
-            axes['ax2'].set_ylim(0, y_max + y_margin)
+        # Axe Y pour PID fixé à 100 (configuré dans setup_graph)
     
     return lines.values()
 
