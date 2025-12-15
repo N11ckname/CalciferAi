@@ -1,0 +1,8 @@
+# LUCIA Four Log File
+# Date: 2025-12-15 23:55:18
+# Format: START ligne = config démarrage, DATA lignes = données en temps réel
+#
+=== LUCIA START ===
+PID: Kp=2.50 Ki=0.03
+Time(ms), Temp(C), Target(C), P, I, Power(%), Error(C)
+---

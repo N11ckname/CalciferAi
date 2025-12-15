@@ -41,8 +41,8 @@ graph_data = {
     'target': [],
     'p': [],
     'i': [],
-    'd': [],
     'power': [],
+    'error': [],
     'lock': threading.Lock()
 }
 
@@ -181,7 +181,7 @@ def parse_and_display_startup(line):
 
 def parse_and_display_data(line, count):
     """Parse et affiche les données en temps réel."""
-    # Nouveau format: time, temp, target, P, I, D, power
+    # Format Arduino: time, temp, target, P, I, power, error
     parts = [p.strip() for p in line.split(',')]
     
     try:
@@ -191,8 +191,8 @@ def parse_and_display_data(line, count):
             temp_target = float(parts[2])
             pid_p = float(parts[3])
             pid_i = float(parts[4])
-            pid_d = float(parts[5])
-            power = int(float(parts[6]))
+            power = int(float(parts[5]))
+            pid_error = float(parts[6])
             
             # Ajouter les données au graphique
             time_minutes = timestamp / 60000.0  # Convertir en minutes
@@ -202,8 +202,8 @@ def parse_and_display_data(line, count):
                 graph_data['target'].append(temp_target)
                 graph_data['p'].append(pid_p)
                 graph_data['i'].append(pid_i)
-                graph_data['d'].append(pid_d)
                 graph_data['power'].append(power)
+                graph_data['error'].append(pid_error)
             
             # Calculer le temps écoulé pour affichage
             hours = timestamp // 3600000
@@ -212,11 +212,11 @@ def parse_and_display_data(line, count):
             
             # Afficher une ligne compacte
             if count % 12 == 1:  # En-tête toutes les 12 lignes (1 minute)
-                print("\n  Temps  |  Sonde  | Consigne | P     | I     | D     | Power")
+                print("\n  Temps  |  Sonde  | Consigne | P     | I     | Power | Error")
                 print("-" * 68)
             
             print(f"{hours:02d}:{minutes:02d}:{seconds:02d} | {temp_actual:6.1f}° | {temp_target:7.1f}° | "
-                  f"{pid_p:5.1f} | {pid_i:5.1f} | {pid_d:5.1f} | {power:3d}%")
+                  f"{pid_p:5.1f} | {pid_i:5.1f} | {power:3d}% | {pid_error:5.1f}")
             return True
     except (ValueError, IndexError):
         pass
@@ -243,7 +243,7 @@ def setup_graph():
     line_target, = ax1.plot([], [], 'g--', label='Consigne', linewidth=1.5)
     ax1.legend(loc='upper left')
     
-    # Subplot 2 : PID (P, I, D) + Puissance
+    # Subplot 2 : PID (P, I) + Puissance
     ax2 = fig.add_subplot(gs[1])
     ax2.set_ylabel('Valeur PID')
     ax2.set_xlabel('Temps (minutes)')
@@ -251,8 +251,7 @@ def setup_graph():
     ax2.grid(True, alpha=0.3)
     ax2.set_ylim(0, 105)  # Axe Y fixé à 100 (+ marge)
     line_p, = ax2.plot([], [], 'c-', label='P', linewidth=1.5)
-    line_i, = ax2.plot([], [], 'm-', label='I', linewidth=1.5)
-    line_d, = ax2.plot([], [], 'y-', label='D', linewidth=1.5)
+    line_i, = ax2.plot([], [], 'y-', label='I', linewidth=1.5)  # I en jaune
     
     # Axe Y secondaire pour la puissance (%)
     ax2_power = ax2.twinx()
@@ -262,8 +261,8 @@ def setup_graph():
     line_power, = ax2_power.plot([], [], 'red', label='Power', linewidth=2, alpha=0.8)
     
     # Légende combinée
-    lines_for_legend = [line_p, line_i, line_d, line_power]
-    labels_for_legend = ['P', 'I', 'D', 'Power']
+    lines_for_legend = [line_p, line_i, line_power]
+    labels_for_legend = ['P', 'I', 'Power']
     ax2.legend(lines_for_legend, labels_for_legend, loc='upper left')
     
     lines = {
@@ -271,7 +270,6 @@ def setup_graph():
         'target': line_target,
         'p': line_p,
         'i': line_i,
-        'd': line_d,
         'power': line_power
     }
     axes = {'ax1': ax1, 'ax2': ax2}
@@ -290,7 +288,6 @@ def update_graph(frame, lines, axes):
         target_data = list(graph_data['target'])
         p_data = list(graph_data['p'])
         i_data = list(graph_data['i'])
-        d_data = list(graph_data['d'])
         power_data = list(graph_data['power'])
     
     # Mettre à jour les lignes
@@ -298,7 +295,6 @@ def update_graph(frame, lines, axes):
     lines['target'].set_data(time_data, target_data)
     lines['p'].set_data(time_data, p_data)
     lines['i'].set_data(time_data, i_data)
-    lines['d'].set_data(time_data, d_data)
     lines['power'].set_data(time_data, power_data)
     
     # Ajuster les axes dynamiquement
@@ -430,7 +426,7 @@ def main():
         ser.reset_input_buffer()
         
         print("🎧 Écoute en cours...")
-        print("📊 Format: Time(ms), Temp(C), Target(C), P, I, D, Power(%)")
+        print("📊 Format: Time(ms), Temp(C), Target(C), P, I, Power(%), Error(C)")
         
         # Lancer le thread de lecture série
         reader_thread = threading.Thread(

@@ -392,7 +392,7 @@ void editSetting(int delta) {
       if (settings.maxDelta < 1) settings.maxDelta = 1;
       if (settings.maxDelta > 50) settings.maxDelta = 50;
       break;
-    case 5: // Exit - ne rien faire, géré par le bouton
+    case 4: // Exit - ne rien faire, géré par le bouton
       break;
   }
 }

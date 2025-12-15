@@ -120,7 +120,7 @@ void drawSettingsItem(int itemIndex, int y) {
       break;
     case 2: 
       label = "Ki"; 
-      dtostrf(KI, 5, 2, sharedBuffer); 
+      dtostrf(KI, 6, 3, sharedBuffer);  // 3 décimales pour incrément de 0.005
       break;
     case 3:  // Kd supprimé, Max delta devient case 3
       label = "Max delta"; 
