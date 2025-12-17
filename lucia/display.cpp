@@ -139,6 +139,7 @@ void drawSettingsItem(int itemIndex, int y) {
 void drawSettingsScreen() {
   u8g2.setFont(u8g2_font_6x10_tf);
   u8g2.drawStr(0, 10, "SETTINGS");
+  u8g2.drawStr(98, 10, "v01.0");  // Version alignée à droite
   updateSettingsScrollOffset();
   
   for (int i = 0; i < 4; i++) {
