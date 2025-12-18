@@ -146,6 +146,47 @@ I want to isolate the main functions in different files:
 
 - Positive terminal → Arduino D6 (control signal)
 - Negative terminal → Breadboard GND rail (ground)
+- Model used: Fotek SSR-25DA (3-32V DC input, ~10-16 mA at 5V)
+
+**7.1 Protection Circuit with NPN Transistor (Recommended)**
+
+To protect Pin 6 from overcurrent (especially with counterfeit SSRs), use an NPN transistor:
+
+```
++5V Arduino
+     │
+    [R2 100Ω]  ← Protection against short-circuit
+     │
+     ▼
+SSR (+) input
+     │
+SSR (-) input
+     │
+     ▼
+Collector (C)
+     │
+     ├──────────────[R1 1kΩ]──────── Pin 6 Arduino
+     │
+   Base (B)  ← NPN Transistor (2N2222A or BC547)
+     │
+Emitter (E)
+     │
+     ▼
+   GND Arduino
+```
+
+**Recommended transistors:**
+| Reference | Ic max | Gain (hFE) | Notes |
+|-----------|--------|------------|-------|
+| 2N2222A | 800 mA | 100-300 | Very common |
+| BC547 | 100 mA | 110-800 | Very common |
+| BC337 | 800 mA | 100-630 | Common |
+
+**Pinout warning:** 2N2222A (E-B-C) and BC547 (C-B-E) have reversed pinouts! Check datasheet.
+
+**Components:**
+- R1 = 1kΩ: Limits base current (~4 mA on Pin 6)
+- R2 = 100Ω: Limits current to 50 mA max if transistor fails (protects Arduino)
 
 **Breadboard Power Supply**
 
@@ -223,8 +264,8 @@ Here is the list of variables to use, with their role:
 
 ### PID Controller Parameters
 
-- **Kp (Proportional Gain):** 2.0
-- **Ki (Integral Gain):** 0.5
+- **Kp (Proportional Gain):** 2.5
+- **Ki (Integral Gain):** 0.03
 - **Kd (Derivative Gain):** 0 (no derivative control)
 - **Power Change Limiting:** Maximum 10% change per PWM cycle to prevent sudden changes
 - **Output Limits:** PowerHold constrained between 0% and 100%
