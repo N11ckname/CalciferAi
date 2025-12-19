@@ -37,10 +37,10 @@ FiringParams params = {100, 50, 5, 570, 250, 15, 1100, 200, 20, 150, 200};
 FiringParams paramsBackup; // Sauvegarde pour détecter les changements
 
 // ===== SETTINGS PARAMETERS =====
-SettingsParams settings = {1000, 2.5, 0.03, 0.0, 10}; // pcycle (ms), kp, ki, kd (non utilisé), maxDelta (°C)
+SettingsParams settings = {1000, 2.5, 0.03, 0.0, 10, 1200}; // pcycle (ms), kp, ki, kd (non utilisé), maxDelta (°C), maxTemp (°C)
 SettingsParams settingsBackup; // Sauvegarde pour détecter les changements
 int selectedSetting = 0;
-const int NUM_SETTINGS = 5; // Heat Cycle, Kp, Ki, Max delta, Exit (Kd supprimé)
+const int NUM_SETTINGS = 6; // Heat Cycle, Kp, Ki, Max delta, Max Temp, Exit
 int settingsScrollOffset = 0; // Scroll pour l'écran settings
 
 // ===== UI PARAMETERS =====
@@ -282,7 +282,7 @@ void handleButtons(unsigned long currentMillis) {
         toggleEditMode();
       }
     } else if (progState == SETTINGS) {
-      if (selectedSetting == 4) {  // Exit est maintenant à l'index 4 (Kd supprimé)
+      if (selectedSetting == 5) {  // Exit est à l'index 5
         progState = PROG_OFF;
         selectedParam = 2; // Retour sur step1Temp par défaut
         editMode = NAV_MODE;
@@ -387,12 +387,17 @@ void editSetting(int delta) {
       if (KI > 1.0) KI = 1.0; // Limiter à 1.0 (valeurs supérieures rarement utiles)
       settings.ki = KI; // Synchroniser settings avec la valeur réelle
       break;
-    case 3: // Max delta (Kd supprimé - case 3 devient Max delta)
+    case 3: // Max delta
       settings.maxDelta += delta * 1; // Incrément de 1°C
       if (settings.maxDelta < 1) settings.maxDelta = 1;
       if (settings.maxDelta > 50) settings.maxDelta = 50;
       break;
-    case 4: // Exit - ne rien faire, géré par le bouton
+    case 4: // Max Temp - température max du four
+      settings.maxTemp += delta * 10; // Incrément de 10°C
+      if (settings.maxTemp < 500) settings.maxTemp = 500;
+      if (settings.maxTemp > 1500) settings.maxTemp = 1500;
+      break;
+    case 5: // Exit - ne rien faire, géré par le bouton
       break;
   }
 }
@@ -479,15 +484,15 @@ void editParameter(int delta) {
     case 0: return; // Settings - ne peut pas être édité ici, géré par le bouton
     // Phase 1
     case 1: value = &params.step1Speed; minVal = 1; maxVal = 1000; step = 10; break;   // P1 gauche
-    case 2: value = &params.step1Temp; minVal = 0; maxVal = 1500; step = 5; break;     // P1 centre (5°C)
+    case 2: value = &params.step1Temp; minVal = 0; maxVal = settings.maxTemp; step = 5; break;     // P1 centre (limité par maxTemp)
     case 3: value = &params.step1Wait; minVal = 0; maxVal = 999; step = 1; break;      // P1 droite (1 min)
     // Phase 2
     case 4: value = &params.step2Speed; minVal = 1; maxVal = 1000; step = 10; break;   // P2 gauche
-    case 5: value = &params.step2Temp; minVal = 0; maxVal = 1500; step = 5; break;     // P2 centre (5°C)
+    case 5: value = &params.step2Temp; minVal = 0; maxVal = settings.maxTemp; step = 5; break;     // P2 centre (limité par maxTemp)
     case 6: value = &params.step2Wait; minVal = 0; maxVal = 999; step = 1; break;      // P2 droite (1 min)
     // Phase 3
     case 7: value = &params.step3Speed; minVal = 1; maxVal = 1000; step = 10; break;   // P3 gauche
-    case 8: value = &params.step3Temp; minVal = 0; maxVal = 1500; step = 5; break;     // P3 centre (5°C)
+    case 8: value = &params.step3Temp; minVal = 0; maxVal = settings.maxTemp; step = 5; break;     // P3 centre (limité par maxTemp)
     case 9: value = &params.step3Wait; minVal = 0; maxVal = 999; step = 1; break;      // P3 droite (1 min)
     // Cooldown
     case 10: value = &params.step4Speed; minVal = 1; maxVal = 1000; step = 10; break;  // Cool gauche
@@ -674,6 +679,8 @@ void loadFromEEPROM() {
     settings.kd = 0.0;  // Forcer à 0 (non utilisé)
     settings.pcycle = constrain(settings.pcycle, 100, 10000);
     settings.maxDelta = constrain(settings.maxDelta, 1, 50);
+    settings.maxTemp = constrain(settings.maxTemp, 500, 1500);
+    if (settings.maxTemp == 0) settings.maxTemp = 1200;  // Valeur par défaut si EEPROM vide
     
     CYCLE_LENGTH = settings.pcycle;
     KP = settings.kp;

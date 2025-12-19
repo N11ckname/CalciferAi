@@ -47,6 +47,7 @@ struct SettingsParams {
   float ki;        // Gain intégral PID
   float kd;        // Gain dérivé PID
   int maxDelta;    // Erreur max (°C) pour passer à phase suivante
+  int maxTemp;     // Température max du four (°C)
 };
 
 #endif

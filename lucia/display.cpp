@@ -36,8 +36,10 @@ void drawProgOffScreen() {
   // Une seule fonte partout : u8g2_font_6x10_tf
   u8g2.setFont(u8g2_font_6x10_tf);
   
-  // Température actuelle en haut
-  if (isnan(currentTemp)) {
+  // Température actuelle en haut (ou WARN si défaillance sonde)
+  if (tempFailActive) {
+    u8g2.drawStr(0, 10, "WARN");
+  } else if (isnan(currentTemp)) {
     u8g2.drawStr(0, 10, "?C");
   } else {
     int tempInt = (int)(currentTemp + 0.5);
@@ -69,24 +71,20 @@ void drawProgOffScreen() {
   drawParamInline(80, 58, "<", params.step4Target, "C", 11);
   
   // Settings en haut à droite (maintenant index 0)
-  if (tempFailActive) {
-    u8g2.drawStr(90, 10, "WARN");
+  if (selectedParam == 0 && editMode == NAV_MODE) {
+    // Cadre de sélection autour de "Settings"
+    u8g2.drawFrame(73, 0, 55, 12);
+    u8g2.drawStr(75, 10, "Settings");
+  } else if (selectedParam == 0 && editMode == EDIT_MODE) {
+    // Inversion vidéo pour "Settings"
+    u8g2.setDrawColor(1);
+    u8g2.drawBox(73, 0, 55, 12);
+    u8g2.setDrawColor(0);
+    u8g2.drawStr(75, 10, "Settings");
+    u8g2.setDrawColor(1);
   } else {
-    if (selectedParam == 0 && editMode == NAV_MODE) {
-      // Cadre de sélection autour de "Settings"
-      u8g2.drawFrame(73, 0, 55, 12);
-      u8g2.drawStr(75, 10, "Settings");
-    } else if (selectedParam == 0 && editMode == EDIT_MODE) {
-      // Inversion vidéo pour "Settings"
-      u8g2.setDrawColor(1);
-      u8g2.drawBox(73, 0, 55, 12);
-      u8g2.setDrawColor(0);
-      u8g2.drawStr(75, 10, "Settings");
-      u8g2.setDrawColor(1);
-    } else {
-      // Affichage normal de "Settings"
-      u8g2.drawStr(75, 10, "Settings");
-    }
+    // Affichage normal de "Settings"
+    u8g2.drawStr(75, 10, "Settings");
   }
 }
 
@@ -122,11 +120,15 @@ void drawSettingsItem(int itemIndex, int y) {
       label = "Ki"; 
       dtostrf(KI, 6, 3, sharedBuffer);  // 3 décimales pour incrément de 0.005
       break;
-    case 3:  // Kd supprimé, Max delta devient case 3
+    case 3:  // Max delta
       label = "Max delta"; 
       snprintf(sharedBuffer, 20, "%dC", settings.maxDelta); 
       break;
-    case 4:  // Exit devient case 4
+    case 4:  // Max Temp - température max du four
+      label = "Max Temp"; 
+      snprintf(sharedBuffer, 20, "%dC", settings.maxTemp); 
+      break;
+    case 5:  // Exit
       label = "Exit"; 
       strcpy(sharedBuffer, "<--");
       break;
