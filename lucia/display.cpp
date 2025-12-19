@@ -98,11 +98,6 @@ void updateSettingsScrollOffset() {
   if (settingsScrollOffset > max) settingsScrollOffset = max;
 }
 
-void drawSettingsScrollIndicator() {
-  if (NUM_SETTINGS <= 4) return;
-  if (settingsScrollOffset > 0) u8g2.drawStr(120, 20, "^");
-  if (settingsScrollOffset < NUM_SETTINGS - 4) u8g2.drawStr(120, 62, "v");
-}
 
 void drawSettingsItem(int itemIndex, int y) {
   const char* label;
@@ -164,8 +159,6 @@ void drawSettingsScreen() {
     drawSettingsItem(idx, y);
     if (sel && editMode == EDIT_MODE) u8g2.setDrawColor(1);
   }
-  
-  drawSettingsScrollIndicator();
 }
 
 void drawProgOnScreen(unsigned long currentMillis) {
