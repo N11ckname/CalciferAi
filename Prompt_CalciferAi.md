@@ -218,8 +218,10 @@ The Settings screen displays a list of modifiable parameters using the same typo
 1. **Heat Cycle** (named "Heat Cycle", corresponds to `Pcycle`) - PWM cycle duration in milliseconds
 2. **Kp** - Proportional gain of the PID controller (displayed on its own line)
 3. **Ki** - Integral gain of the PID controller (displayed on its own line)
-4. **Kd** - Derivative gain of the PID controller (displayed on its own line)
+4. **Max delta** - Maximum temperature tolerance to consider a plateau reached (1 to 50°C, default: 10°C)
 5. **Exit** - Button to exit settings and return to Phase 0
+
+**Note:** Kd (derivative gain) has been removed as it's not suitable for ceramic kiln control due to high thermal inertia.
 
 ### Settings Navigation and Editing
 
@@ -248,7 +250,7 @@ Here is the list of variables to use, with their role:
 | **Step2Wait** | The duration of the second plateau in minutes | 15 |
 | **Step3Temp** | The temperature to reach during the final heating phase | 1100 |
 | **Step3Speed** | The heating rate during the final heating phase in degrees per hour | 200 |
-| **Step3Stage** | The duration of the final plateau in minutes | 20 |
+| **Step3Wait** | The duration of the final plateau in minutes | 20 |
 | **Step4Speed** | Cooling phase rate in °C/h | 150 |
 | **Step4Target** | The temperature at which the program ends and displays a success message | 200 |
 
@@ -256,6 +258,9 @@ Here is the list of variables to use, with their role:
 
 - Always use functions that do not stop the program like `millis()` to maintain maximum fluidity. Avoid using the `delay()` function.
 - Do not exceed **31,232 bytes** for the program
+- **Optional Features:** Use `#define` to enable/disable features:
+  - `ENABLE_LOGGING`: Serial logging for debugging (~250 bytes)
+  - `ENABLE_GRAPH`: Temperature graph display (~800 bytes)
 - **Float to String Conversion:** On Arduino, `snprintf()` with `%f` format specifier is not always supported or may produce "?" characters. **Always use `dtostrf()` function** to convert float values to strings before using them with `snprintf()`.
   - Example: `dtostrf(floatValue, 3, 1, buffer);` converts float to string with 3 total characters and 1 decimal place
   - Then use: `snprintf(finalBuffer, size, "Label:%s", buffer);`
@@ -264,17 +269,19 @@ Here is the list of variables to use, with their role:
 
 ### PID Controller Parameters
 
-- **Kp (Proportional Gain):** 2.5
-- **Ki (Integral Gain):** 0.03
-- **Kd (Derivative Gain):** 0 (no derivative control)
+- **Kp (Proportional Gain):** 2.5 (modifiable via Settings, range 0.0-10.0)
+- **Ki (Integral Gain):** 0.03 (modifiable via Settings, range 0.0-1.0)
+- **Kd (Derivative Gain):** Not used (removed - unsuitable for high thermal inertia systems)
 - **Power Change Limiting:** Maximum 10% change per PWM cycle to prevent sudden changes
 - **Output Limits:** PowerHold constrained between 0% and 100%
+- **Max Delta:** Temperature tolerance for phase completion (default 10°C, range 1-50°C)
+- **PID Update Interval:** 1000ms (1 Hz, adapted to kiln thermal inertia)
 
 ### User Interface & Navigation
 
 #### Encoder Navigation (prog_OFF mode)
 - **Navigation Order:** Scroll through all parameters sequentially in this order:
-  - Step1Temp → Step1Speed → Step1Wait → Step2Temp → Step2Speed → Step2Wait → Step3Temp → Step3Speed → Step3Stage → Step4Speed → Step4Target
+  - Settings → Step1Speed → Step1Temp → Step1Wait → Step2Speed → Step2Temp → Step2Wait → Step3Speed → Step3Temp → Step3Wait → Step4Speed → Step4Target
 - **Selection Indication:** Selected item appears with inverted colors (text and background swapped)
 - **Editing Indication:** Thin outline drawn around the selected element being edited
 - **End of List Behavior:** Cycle from first to last items (circular navigation)
@@ -315,9 +322,12 @@ Here is the list of variables to use, with their role:
 ### Temperature Control Logic
 
 #### Setpoint Calculation
-- **Formula:** `targetTemp = currentTemp + (heatingRate × timeElapsed / 3600)`
+- **Formula:** `targetTemp = phaseStartTemp + (heatingRate × timeElapsed / 3600000)`
+  - Uses `phaseStartTemp` (temperature at phase start) not current temperature
+  - `timeElapsed` is in milliseconds
+  - This ensures smooth progression independent of actual temperature fluctuations
 - **Time Base:** Calculate from phase start time using `millis()`
-- **Phase Completion:** Phase is considered "reached" when temperature is within 5°C of target AND above target temperature
+- **Phase Completion:** Phase is considered "reached" when temperature is within `maxDelta`°C of target AND above target temperature
 
 #### Overshoot Handling
 - **Method:** Reduce heating power gradually using PID controller
@@ -354,7 +364,8 @@ Here is the list of variables to use, with their role:
 #### Settings to Save
 - All phase temperatures (Step1Temp, Step2Temp, Step3Temp)
 - All phase speeds (Step1Speed, Step2Speed, Step3Speed, Step4Speed)
-- All phase wait times (Step1Wait, Step2Wait, Step3Stage)
+- All phase wait times (Step1Wait, Step2Wait, Step3Wait)
+- All settings parameters (Pcycle, Kp, Ki, maxDelta)
 - Cooldown target (Step4Target)
 
 #### Save Trigger
@@ -364,8 +375,18 @@ Here is the list of variables to use, with their role:
 #### Startup Behavior
 - Load last saved settings from EEPROM on power-up
 - If EEPROM has never been written (first use), use default values from variables table
+- **Smart Hot Resume:** When starting a program, the system automatically detects the appropriate phase based on current temperature:
+  - If temp < Step1Temp: Start at Phase 1
+  - If temp < Step2Temp: Start at Phase 2 (hot resume)
+  - If temp < Step3Temp: Start at Phase 3 (hot resume)
+  - Otherwise: Start cooldown (Phase 4)
 
 ### Additional Features
+
+#### Temperature Reading Optimization
+- **Reading Interval:** Temperature is read every 500ms (TEMP_READ_INTERVAL)
+- **Temperature Cache:** Uses cached value between reads to reduce SPI communication overhead
+- **Valid Range:** -200°C to 2000°C (values outside this range are considered invalid)
 
 #### Time Display
 - **Phase Elapsed Time:** Display time elapsed in current phase (format: HH:MM or MM:SS)

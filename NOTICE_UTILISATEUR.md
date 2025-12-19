@@ -13,7 +13,6 @@ CalciferAi est un système de contrôle automatique pour four céramique. Il per
 
 ### LED Témoin
 - **LED allumée** : Le four chauffe
-- **LED éteinte** : Le four ne chauffe pas
 
 ## 📋 Écran Principal (Mode Arrêt)
 
@@ -32,10 +31,10 @@ L'écran affiche les paramètres de votre programme de cuisson :
 
 ### 1. Navigation entre les paramètres
 1. Tournez l'encodeur pour sélectionner un paramètre (il s'affiche en vidéo inversé)
-2. Les paramètres défilent dans l'ordre : vitesse → température → durée pour chaque phase
+2. Les paramètres défilent dans l'ordre : Settings → vitesse → température → durée pour chaque phase
 
 ### 2. Modification d'un paramètre
-1. **Cliquez** sur l'encodeur pour entrer en mode édition (un cadre fin apparaît)
+1. **Cliquez** sur l'encodeur pour entrer en mode édition (un cadre fin apparaît autour du paramètre)
 2. **Tournez** l'encodeur pour modifier la valeur
 3. **Cliquez** à nouveau pour valider (la valeur est automatiquement sauvegardée)
 
@@ -57,14 +56,83 @@ Si vous démarrez un programme alors que le four est déjà chaud, le système d
 ## 🔥 Pendant la Cuisson (Mode En Marche)
 
 ### Affichage
-- **Phase en cours** : Affichée en blanc
+- **Phase en cours** : Affichée en blanc (exemple : "Phase 2 : 150°C/h → 600°C, 10 min")
 - **Phases terminées** : Grisées
 - **Phases à venir** : Grisées
-- **Température actuelle** vs **Température cible** : Affichées en temps réel
-- **État relais** : ON/OFF avec pourcentage de puissance (en rouge)
+- **Température actuelle vs cible** : Affichées en temps réel
+- **État du chauffage** : "HEATING" en vert quand le four chauffe
+- **Puissance** : ON/OFF avec pourcentage (0-100%) affiché en rouge
 
 ### Arrêt d'urgence
 **Appuyez sur le bouton poussoir** à tout moment pour arrêter immédiatement le programme et couper le chauffage.
+
+## 🔬 Fonctionnalités Optionnelles (Avancé)
+
+CalciferAi propose deux fonctionnalités optionnelles qui peuvent être activées selon vos besoins :
+
+### 📊 Le Graphique de Température (ENABLE_GRAPH)
+
+**Description** : Affiche un graphique en temps réel pendant la cuisson montrant :
+- La courbe de température prévue (profil programmé)
+- La courbe de température réelle mesurée
+- Permet de visualiser si le four suit correctement le programme
+
+**Accès** : Pendant la cuisson, maintenez le clic sur l'encodeur pendant plus d'1 seconde pour basculer entre l'écran principal et le graphique.
+
+**Consommation** : ~800 octets de RAM
+
+### 📡 Le Logging Série (ENABLE_LOGGING)
+
+**Description** : Envoie les données de cuisson via le port série USB vers un ordinateur :
+- Température actuelle et cible en temps réel
+- Valeurs PID (Proportionnel, Intégral)
+- Puissance de chauffe (%)
+- Erreur de température
+- Une ligne de données toutes les 5 secondes
+
+**Utilisation** : Connectez l'Arduino à un ordinateur, ouvrez le moniteur série (9600 bauds) pour voir et enregistrer les données.
+
+**Consommation** : ~250 octets de RAM
+
+### ⚠️ Limitation Importante
+
+**Vous ne pouvez PAS activer les deux en même temps !**
+
+**Raison** : L'Arduino Uno dispose seulement de **2048 octets de RAM** au total. Les deux fonctionnalités ensemble consommeraient ~1050 octets, ce qui laisserait trop peu de mémoire pour le fonctionnement normal du système et provoquerait des plantages ou des comportements imprévisibles.
+
+### 🔧 Comment Activer ces Fonctionnalités
+
+**Fichier à modifier** : `lucia/definitions.h`
+
+**Lignes 21-23** :
+```cpp
+// ===== FONCTIONNALITÉS OPTIONNELLES =====
+// Décommentez pour activer (voir ACTIVATION_FONCTIONNALITES.md pour détails)
+#define ENABLE_LOGGING  // Logging Serial (~250 octets) - Monitoring/Debug
+//#define ENABLE_GRAPH    // Graphe température (~800 octets) - Visualisation
+```
+
+**Pour activer le LOGGING** (configuration par défaut) :
+```cpp
+#define ENABLE_LOGGING  // ← Ligne active (sans //)
+//#define ENABLE_GRAPH    // ← Ligne désactivée (avec //)
+```
+
+**Pour activer le GRAPHIQUE** :
+```cpp
+//#define ENABLE_LOGGING  // ← Ligne désactivée (ajoutez //)
+#define ENABLE_GRAPH    // ← Ligne active (retirez //)
+```
+
+
+
+**⚠️ Important** : Après modification, vous devez **recompiler et téléverser** le programme sur l'Arduino.
+
+### 💡 Quel Mode Choisir ?
+
+- **LOGGING** : Pour analyser et enregistrer les cuissons, créer des courbes sur ordinateur, déboguer
+- **GRAPHIQUE** : Pour surveiller visuellement la cuisson directement sur l'écran OLED, sans ordinateur
+- **Aucun** : Pour économiser de la RAM si vous rencontrez des problèmes de stabilité
 
 ## 🔧 Réglages Avancés (Menu Settings)
 
