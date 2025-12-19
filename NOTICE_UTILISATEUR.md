@@ -18,6 +18,18 @@ CalciferAi est un système de contrôle automatique pour four céramique. Il per
 
 L'écran affiche les paramètres de votre programme de cuisson :
 
+**Simulation d'écran :**
+```
+┌────────────────────────────────┐
+│ 25C              Settings      │
+│ P1: 50C/h >100C 5m             │
+│ P2: 250C/h >570C 15m           │
+│ P3: 200C/h >1100C 20m          │
+│ Cool: 150C/h <200C             │
+└────────────────────────────────┘
+```
+*Note : Le paramètre sélectionné apparaît avec un cadre*
+
 ### Phase 1, 2 et 3 (Montée en température)
 - **Vitesse** : Vitesse de chauffe en °C/h (10 à 1000)
 - **Température** : Température cible en °C (0 à 1500)
@@ -33,15 +45,6 @@ L'écran affiche les paramètres de votre programme de cuisson :
 1. Tournez l'encodeur pour sélectionner un paramètre (il s'affiche en vidéo inversé)
 2. Les paramètres défilent dans l'ordre : Settings → vitesse → température → durée pour chaque phase
 
-### 2. Modification d'un paramètre
-1. **Cliquez** sur l'encodeur pour entrer en mode édition (un cadre fin apparaît autour du paramètre)
-2. **Tournez** l'encodeur pour modifier la valeur
-3. **Cliquez** à nouveau pour valider (la valeur est automatiquement sauvegardée)
-
-### 3. Incréments de modification
-- **Vitesses** : Pas de 10°C/h
-- **Températures** : Pas de 5°C
-- **Durées** : Pas de 1 minute
 
 ## 🚀 Démarrage d'un Programme
 
@@ -50,18 +53,29 @@ L'écran affiche les paramètres de votre programme de cuisson :
 3. L'écran passe en mode "EN MARCHE"
 4. Le programme démarre automatiquement
 
+**Simulation écran en cours de cuisson :**
+```
+┌────────────────────────────────┐
+│ Phase 2                        │
+│ 250C/h->570C, 15m              │
+│────────────────────────────────│
+│ Temp Read            365C      │
+│ Temp Target          420C      │
+│ Heat Power            78%      │
+│ Phase                 45%      │
+└────────────────────────────────┘
+```
+
 ### Reprise à chaud
 Si vous démarrez un programme alors que le four est déjà chaud, le système détecte automatiquement la phase appropriée et reprend à partir de la température actuelle.
 
 ## 🔥 Pendant la Cuisson (Mode En Marche)
 
 ### Affichage
-- **Phase en cours** : Affichée en blanc (exemple : "Phase 2 : 150°C/h → 600°C, 10 min")
-- **Phases terminées** : Grisées
-- **Phases à venir** : Grisées
+- **Phase en cours** : Affichée clairement (exemple : "Phase 2 : 250°C/h→570C, 15m")
 - **Température actuelle vs cible** : Affichées en temps réel
-- **État du chauffage** : "HEATING" en vert quand le four chauffe
-- **Puissance** : ON/OFF avec pourcentage (0-100%) affiché en rouge
+- **État du chauffage** : "Temp Read" et "Temp Target" affichés
+- **Puissance** : "Heat Power" avec pourcentage (0-100%)
 
 ### Arrêt d'urgence
 **Appuyez sur le bouton poussoir** à tout moment pour arrêter immédiatement le programme et couper le chauffage.
@@ -77,7 +91,23 @@ CalciferAi propose deux fonctionnalités optionnelles qui peuvent être activée
 - La courbe de température réelle mesurée
 - Permet de visualiser si le four suit correctement le programme
 
-**Accès** : Pendant la cuisson, maintenez le clic sur l'encodeur pendant plus d'1 seconde pour basculer entre l'écran principal et le graphique.
+**Accès** : Pendant la cuisson, cliquez sur l'encodeur pour basculer entre l'écran principal et le graphique.
+
+**Simulation écran graphique :**
+```
+┌────────────────────────────────┐
+│P:12.5  ┌──────────────────┐    │
+│I:8.3   │         ╱────────│1100C│
+│        │       ╱          │    │
+│        │     ╱            │    │
+│        │   ╱··            │    │
+│        │ ╱·               │    │
+│        └──────────────────┘    │
+│                       4h30      │
+└────────────────────────────────┘
+```
+*Ligne continue = température cible*  
+*Points = température mesurée*
 
 **Consommation** : ~800 octets de RAM
 
@@ -91,6 +121,22 @@ CalciferAi propose deux fonctionnalités optionnelles qui peuvent être activée
 - Une ligne de données toutes les 5 secondes
 
 **Utilisation** : Connectez l'Arduino à un ordinateur, ouvrez le moniteur série (9600 bauds) pour voir et enregistrer les données.
+
+**Exemple de sortie série :**
+```
+=== LUCIA START ===
+PID: Kp=2.50 Ki=0.03
+Time(ms), Temp(C), Target(C), P, I, Power(%), Error(C)
+---
+>>> PROGRAMME DEMARRE <<<
+Temperature initiale: 25.5C
+Phase detectee: 1
+---
+5000, 28.3, 30.5, 5.5, 0.2, 15, 2.2
+10000, 33.1, 35.2, 5.2, 0.8, 20, 2.1
+15000, 38.7, 40.8, 5.2, 1.5, 28, 2.1
+...
+```
 
 **Consommation** : ~250 octets de RAM
 
@@ -137,22 +183,72 @@ CalciferAi propose deux fonctionnalités optionnelles qui peuvent être activée
 ## 🔧 Réglages Avancés (Menu Settings)
 
 ### Accès au menu Settings
-1. En mode Arrêt, sélectionnez l'icône "S" en haut à droite
+1. En mode Arrêt, sélectionnez l'icône "Settings" en haut à droite
 2. Cliquez sur l'encodeur pour entrer dans les réglages
+
+**Simulation écran Settings :**
+```
+┌────────────────────────────────┐
+│ SETTINGS             v01.0     │
+│                                │
+│ Heat Cycle             1000ms  │
+│ Kp                      2.5    │
+│ Ki                     0.030   │
+│ Max delta                10C   │
+│ Max Temp               1200C   │  ← Sécurité
+│ Exit                    <--    │
+└────────────────────────────────┘
+```
+*Note : L'élément sélectionné est entouré d'un cadre. Utilisez l'encodeur pour naviguer entre les paramètres.*
 
 ### Paramètres disponibles
 - **Heat Cycle** : Durée du cycle PWM (100 à 10000 ms) - *Avancé*
 - **Kp** : Gain proportionnel PID (0.0 à 10.0) - *Avancé*
 - **Ki** : Gain intégral PID (0.0 à 1.0) - *Avancé*
 - **Max delta** : Tolérance de fin de phase (1 à 50°C) - *Recommandé : 10°C*
+- **Max Temp** : Température maximum du four (500 à 1500°C) - *🛡️ SÉCURITÉ*
 - **Exit** : Sortir du menu Settings
 
-⚠️ **Note** : Ne modifiez les paramètres PID (Kp, Ki) que si vous comprenez leur fonctionnement. Les valeurs par défaut sont optimisées.
+⚠️ **Notes importantes** :
+- Ne modifiez les paramètres PID (Kp, Ki) que si vous comprenez leur fonctionnement. Les valeurs par défaut sont optimisées.
+
+### 🛡️ Protection Max Temp (IMPORTANT)
+
+**Max Temp** est un paramètre de sécurité crucial qui limite la température maximum programmable :
+
+- **Valeur par défaut** : 1200°C (four céramique standard)
+- **Plage de réglage** : 500°C à 1500°C
+- **Modification** : Par pas de 10°C
+
+**Rôle de protection** :
+1. Empêche de programmer des températures supérieures aux capacités du four
+2. Protège contre les erreurs de manipulation (ex: 1800°C au lieu de 180°C)
+3. Permet d'adapter le système à différents types de fours
+4. Les températures des phases 1, 2 et 3 sont automatiquement limitées à cette valeur
+
+**Exemples de réglage** :
+- Four Raku : 1000-1100°C
+- Four grès/porcelaine : 1200-1300°C
+- Four haute température : 1400-1500°C
+
+⚠️ **Avant de modifier** : Vérifiez la température maximum supportée par votre four dans sa documentation technique !
 
 ## ⚠️ Messages d'Erreur
 
 ### "Temp fail 2min" / "Heat stopped"
 **Cause** : Le capteur de température ne fonctionne pas correctement depuis plus de 2 minutes.
+
+**Simulation écran d'erreur :**
+```
+┌────────────────────────────────┐
+│ ERROR!                         │
+│                                │
+│ Temp fail 2min                 │
+│ Heat stopped                   │
+│ Check sensor                   │
+│                                │
+└────────────────────────────────┘
+```
 
 **Action** :
 1. Vérifiez les connexions du thermocouple
@@ -161,6 +257,18 @@ CalciferAi propose deux fonctionnalités optionnelles qui peuvent être activée
 
 ### "MAX31856 Error!" / "Check wiring"
 **Cause** : Le module de lecture de température n'est pas détecté au démarrage.
+
+**Simulation écran d'erreur :**
+```
+┌────────────────────────────────┐
+│                                │
+│ MAX31856 Error!                │
+│                                │
+│ Check wiring                   │
+│ Press to retry                 │
+│                                │
+└────────────────────────────────┘
+```
 
 **Action** :
 1. Vérifiez toutes les connexions du module MAX31856

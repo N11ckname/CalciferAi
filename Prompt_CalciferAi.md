@@ -68,12 +68,13 @@ The information visible on the screen are:
 
 ### Example of prog_ON screen, in phase 3:
 
-Phase 1 : 100 °C/h >150 °C, wait 60 min (grayed line because phase completed)  
-Phase 2 : 150 °C/h > 600 °C, wait 10 min (grayed line because phase completed)  
-Phase 3 : 600 °C/h up to 980 °C, wait 10 min (white line, phase in progress)  
-Cooldown : 150 °C/h <500°C (grayed line, phase to come)  
-HEATING : Temp 155°C, Target 167°C (line in green)  
-ON, 60% (line in red)
+Phase 3 (current phase displayed)  
+250C/h->980C, 10m  
+────────────────────────────  
+Temp Read            155C  
+Temp Target          167C  
+Heat Power            60%  
+Phase                 45%
 
 ## File Organization
 
@@ -219,9 +220,12 @@ The Settings screen displays a list of modifiable parameters using the same typo
 2. **Kp** - Proportional gain of the PID controller (displayed on its own line)
 3. **Ki** - Integral gain of the PID controller (displayed on its own line)
 4. **Max delta** - Maximum temperature tolerance to consider a plateau reached (1 to 50°C, default: 10°C)
-5. **Exit** - Button to exit settings and return to Phase 0
+5. **Max Temp** - Maximum kiln temperature (500 to 1500°C, default: 1200°C) - Safety protection
+6. **Exit** - Button to exit settings and return to Phase 0
 
-**Note:** Kd (derivative gain) has been removed as it's not suitable for ceramic kiln control due to high thermal inertia.
+**Notes:** 
+- Kd (derivative gain) has been removed as it's not suitable for ceramic kiln control due to high thermal inertia.
+- **Max Temp** is a safety feature that prevents programming temperatures higher than the kiln's capability. All phase temperatures (Step1Temp, Step2Temp, Step3Temp) are automatically limited to this maximum value.
 
 ### Settings Navigation and Editing
 
@@ -254,6 +258,19 @@ Here is the list of variables to use, with their role:
 | **Step4Speed** | Cooling phase rate in °C/h | 150 |
 | **Step4Target** | The temperature at which the program ends and displays a success message | 200 |
 
+### Settings Parameters (SettingsParams structure)
+
+| Variable | Function | Default Value |
+|----------|----------|---------------|
+| **Kp** | PID Proportional gain | 2.5 |
+| **Ki** | PID Integral gain | 0.03 |
+| **Kd** | PID Derivative gain (not used, always 0) | 0.0 |
+| **maxDelta** | Temperature tolerance to consider plateau reached (°C) | 10 |
+| **maxTemp** | Maximum kiln temperature - safety limit (°C) | 1200 |
+| **pcycle** | PWM cycle duration (milliseconds) | 1000 |
+
+**Note:** All phase temperatures (Step1Temp, Step2Temp, Step3Temp) are automatically constrained to not exceed **maxTemp** value for safety.
+
 ## Notes for Programming Choices
 
 - Always use functions that do not stop the program like `millis()` to maintain maximum fluidity. Avoid using the `delay()` function.
@@ -282,7 +299,7 @@ Here is the list of variables to use, with their role:
 #### Encoder Navigation (prog_OFF mode)
 - **Navigation Order:** Scroll through all parameters sequentially in this order:
   - Settings → Step1Speed → Step1Temp → Step1Wait → Step2Speed → Step2Temp → Step2Wait → Step3Speed → Step3Temp → Step3Wait → Step4Speed → Step4Target
-- **Selection Indication:** Selected item appears with inverted colors (text and background swapped)
+- **Selection Indication:** Selected item appears with inverted display (black background, white text)
 - **Editing Indication:** Thin outline drawn around the selected element being edited
 - **End of List Behavior:** Cycle from first to last items (circular navigation)
 
@@ -301,15 +318,12 @@ Here is the list of variables to use, with their role:
 - **Screen Refresh Rate:** 500ms (2 times per second)
 - **Font Sizes:** Use defaults from U8g2 library, sized to fit all information on 128x64 screen
 
-#### Color Scheme
+#### Display Style (Monochrome OLED)
 - **Background:** Black
-- **Normal Text:** White
-- **Current Phase:** White (bright)
-- **Completed Phases:** Dimmed/grayed out (lower brightness)
-- **Future Phases:** Dimmed/grayed out (lower brightness)
-- **Heating Status:** Green text for "HEATING"
-- **Relay Status:** Red text for relay percentage
-- **Error Messages:** Red text
+- **Normal Text:** White pixels
+- **Selected Item:** Inverted display (white background, black text) or frame around item
+- **Editing Item:** Filled box with inverted text
+- **Note:** Display is monochrome (black and white only), no colors or grayscale
 
 #### Display Pages
 1. **Main Page:** Standard prog_OFF or prog_ON display
@@ -349,7 +363,7 @@ Here is the list of variables to use, with their role:
 
 #### Error Display
 - **Format:** Error message at top of screen
-- **Color:** Red text
+- **Display:** Standard white text on black background (monochrome)
 - **Lower Section:** Continue showing other information when possible
 - **Critical Errors:** Replace entire screen with error message
 
@@ -416,9 +430,8 @@ Here is the list of variables to use, with their role:
 
 #### prog_ON State
 - Display current status and all phases
-- Highlight current phase in white
-- Dim completed phases
-- Dim future phases
+- Show current phase information clearly
+- Display temperature readings, target, and power percentage
 - Show current temperature and target temperature
 - Show relay status and heating percentage
 - No editing allowed
