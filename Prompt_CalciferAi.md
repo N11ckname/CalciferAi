@@ -156,8 +156,6 @@ To protect Pin 6 from overcurrent (especially with counterfeit SSRs), use an NPN
 ```
 +5V Arduino
      │
-    [R2 100Ω]  ← Protection against short-circuit
-     │
      ▼
 SSR (+) input
      │
@@ -170,7 +168,11 @@ Collector (C)
      │
    Base (B)  ← NPN Transistor (2N2222A or BC547)
      │
-Emitter (E)
+     ├──────────[R_pulldown 10kΩ]───┐
+     │                               │
+Emitter (E)                          │
+     │                               │
+     └───────────────────────────────┘
      │
      ▼
    GND Arduino
@@ -186,8 +188,14 @@ Emitter (E)
 **Pinout warning:** 2N2222A (E-B-C) and BC547 (C-B-E) have reversed pinouts! Check datasheet.
 
 **Components:**
-- R1 = 1kΩ: Limits base current (~4 mA on Pin 6)
-- R2 = 100Ω: Limits current to 50 mA max if transistor fails (protects Arduino)
+- R1 = 1kΩ: Limits base current (~4 mA on Pin 6), provides current drive for transistor
+- R_pulldown = 10kΩ: Pull-down resistor to ensure transistor stays OFF during Arduino startup (prevents unwanted SSR activation)
+
+**Why no series resistor on SSR?**
+- Fotek SSRs typically draw 10-25 mA at 3-32V DC input
+- A series resistor would reduce available voltage/current and could prevent proper SSR operation
+- The transistor's current gain (hFE 100-300) already provides protection by limiting max collector current
+- Pull-down resistor ensures safe startup behavior
 
 **Breadboard Power Supply**
 
