@@ -30,7 +30,8 @@ except ImportError:
 
 # Configuration
 BAUD_RATE = 9600  # 9600 bauds pour robustesse maximale (environnement industriel)
-LOGS_DIR = "logs"
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))  # Répertoire du script
+LOGS_DIR = os.path.join(SCRIPT_DIR, "logs")  # Dossier logs toujours à côté du script
 TIMEOUT = 2  # Timeout de lecture série (secondes)
 
 # Données pour le graphique (partagées entre threads)

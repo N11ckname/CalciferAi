@@ -122,6 +122,18 @@ CalciferAi propose deux fonctionnalités optionnelles qui peuvent être activée
 
 **Utilisation** : Connectez l'Arduino à un ordinateur, ouvrez le moniteur série (9600 bauds) pour voir et enregistrer les données.
 
+**Installation des dépendances** (une seule fois) :
+```bash
+cd /chemin/vers/CalciferAi/Logger
+pip3 install -r requirements_logger.txt
+```
+
+**Lancer le Logger avec graphique** :
+```bash
+cd /chemin/vers/CalciferAi
+python3 Logger/arduino_logger.py
+```
+
 **Exemple de sortie série :**
 ```
 === LUCIA START ===

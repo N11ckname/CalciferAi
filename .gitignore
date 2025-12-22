@@ -1,0 +1,22 @@
+# Environnement virtuel Python
+.venv/
+venv/
+env/
+
+# Cache Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Fichiers système macOS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs temporaires (garder les logs de cuisson importants)
+# Logger/logs/*.csv  # Décommentez si vous ne voulez pas versionner les logs
+
