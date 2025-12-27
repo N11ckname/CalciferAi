@@ -79,6 +79,10 @@
 ```
 +5V Arduino
      │
+     │
+     100Ω
+     │
+     │
      ▼
 SSR (+) input
      │
@@ -103,6 +107,7 @@ Emitter (E)        │
 
 **⚠️ 2N2222A Pinout**: E-B-C (Emitter-Base-Collector) - Check the datasheet!
 
+![Diagram](images/wiring%20diagram.png)
 ---
 
 ## 3. Upload the Program
